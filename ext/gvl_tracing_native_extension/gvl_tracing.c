@@ -40,7 +40,6 @@ static void on_event(rb_event_flag_t event, const rb_internal_thread_event_data_
 static FILE *output_file = NULL;
 static rb_internal_thread_event_hook_t *current_hook = NULL;
 static long started_tracing_at_microseconds = 0;
-static bool first_event = true;
 static pid_t process_id = 0;
 
 void Init_gvl_tracing_native_extension(void) {
@@ -58,7 +57,6 @@ static VALUE tracing_start(VALUE _self, VALUE output_path) {
   if (output_file == NULL) rb_syserr_fail(errno, "Failed to open GvlTracing output file");
 
   started_tracing_at_microseconds = timestamp_microseconds();
-  first_event = true;
   process_id = getpid();
 
   fprintf(output_file, "[\n");
@@ -85,7 +83,7 @@ static VALUE tracing_stop(VALUE _self) {
   rb_internal_thread_remove_event_hook(current_hook);
 
   render_event("stopped_tracing");
-  fprintf(output_file, "\n]\n");
+  fprintf(output_file, "]\n");
 
   if (fclose(output_file) != 0) rb_syserr_fail(errno, "Failed to close GvlTracing output file");
 
@@ -103,13 +101,6 @@ static long timestamp_microseconds(void) {
 // Render output using trace event format for perfetto:
 // https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/trace-event-format.md
 static void render_event(const char *event_name) {
-  // Deal with JSON not having hanging commas...
-  if (first_event) {
-    first_event = false;
-  } else {
-    fprintf(output_file, ",\n");
-  }
-
   // Event data
   long now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
   pid_t thread_id = gettid();
