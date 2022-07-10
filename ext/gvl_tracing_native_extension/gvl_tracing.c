@@ -24,6 +24,7 @@
 // SOFTWARE.
 
 #include <ruby/ruby.h>
+#include <ruby/thread.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -33,9 +34,11 @@ static VALUE tracing_start(VALUE _self, VALUE output_path);
 static VALUE tracing_stop(VALUE _self);
 static long timestamp_microseconds(void);
 static void render_event(const char *event_name);
+static void on_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 
 // Global mutable state
 static FILE *output_file = NULL;
+static rb_internal_thread_event_hook_t *current_hook = NULL;
 static long started_tracing_at_microseconds = 0;
 static bool first_event = true;
 static pid_t process_id = 0;
@@ -61,11 +64,25 @@ static VALUE tracing_start(VALUE _self, VALUE output_path) {
   fprintf(output_file, "[\n");
   render_event("started_tracing");
 
+  current_hook = rb_internal_thread_add_event_hook(
+    on_event,
+    (
+      RUBY_INTERNAL_THREAD_EVENT_READY |
+      RUBY_INTERNAL_THREAD_EVENT_RESUMED |
+      RUBY_INTERNAL_THREAD_EVENT_SUSPENDED |
+      RUBY_INTERNAL_THREAD_EVENT_STARTED |
+      RUBY_INTERNAL_THREAD_EVENT_EXITED
+    ),
+    NULL
+  );
+
   return Qtrue;
 }
 
 static VALUE tracing_stop(VALUE _self) {
   if (output_file == NULL) rb_raise(rb_eRuntimeError, "Tracing not running");
+
+  rb_internal_thread_remove_event_hook(current_hook);
 
   render_event("stopped_tracing");
   fprintf(output_file, "\n]\n");
@@ -111,4 +128,16 @@ static void render_event(const char *event_name) {
     // Args for second line
     process_id, thread_id, now_microseconds, event_name
   );
+}
+
+static void on_event(rb_event_flag_t event_id, const rb_internal_thread_event_data_t *_unused1, void *_unused2) {
+  const char* event_name;
+  switch (event_id) {
+    case RUBY_INTERNAL_THREAD_EVENT_READY:     event_name = "ready";     break;
+    case RUBY_INTERNAL_THREAD_EVENT_RESUMED:   event_name = "resumed";   break;
+    case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED: event_name = "suspended"; break;
+    case RUBY_INTERNAL_THREAD_EVENT_STARTED:   event_name = "started";   break;
+    case RUBY_INTERNAL_THREAD_EVENT_EXITED:    event_name = "exited";    break;
+  };
+  render_event(event_name);
 }
