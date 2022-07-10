@@ -40,7 +40,7 @@ GvlTracing.stop
 
 To do so:
 
-1. Download link:examples/example1.json.gz[]
+1. Download link:https://github.com/ivoanjo/gvl-tracing/blob/master/examples/example1.json.gz?raw=true[`examples/example1.json.gz`]
 2. Navigate to https://ui.perfetto.dev/ and use the **Open trace file** option to load the file
 
 == Quick start using docker
