@@ -8,8 +8,7 @@ Gem::Specification.new do |spec|
   spec.authors = ["Ivo Anjo"]
   spec.email = ["ivo@ivoanjo.me"]
 
-  spec.summary = "TODO: Write a short summary, because RubyGems requires one."
-  spec.description = "TODO: Write a longer description or delete this line."
+  spec.summary = "Get a timeline view of Global VM Lock usage in your Ruby app"
   spec.homepage = "https://github.com/ivoanjo/gvl-tracing"
   # TODO: Missing license
   spec.required_ruby_version = ">= 3.2.0"
