@@ -9,3 +9,4 @@
 /experiments/
 gems.locked
 *.so
+example*json
