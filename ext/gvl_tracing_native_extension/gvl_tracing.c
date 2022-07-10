@@ -122,7 +122,7 @@ static void render_event(const char *event_name) {
 }
 
 static void on_event(rb_event_flag_t event_id, const rb_internal_thread_event_data_t *_unused1, void *_unused2) {
-  const char* event_name;
+  const char* event_name = "bug_unknown_event";
   switch (event_id) {
     case RUBY_INTERNAL_THREAD_EVENT_READY:     event_name = "ready";     break;
     case RUBY_INTERNAL_THREAD_EVENT_RESUMED:   event_name = "resumed";   break;
