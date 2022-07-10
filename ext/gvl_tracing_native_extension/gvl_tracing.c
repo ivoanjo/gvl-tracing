@@ -23,15 +23,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "ruby/ruby.h"
-#include "errno.h"
+#include <ruby/ruby.h>
+#include <errno.h>
+#include <stdbool.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-VALUE tracing_start(VALUE _self, VALUE output_path);
-VALUE tracing_stop(VALUE _self);
-long timestamp_microseconds(void);
+static VALUE tracing_start(VALUE _self, VALUE output_path);
+static VALUE tracing_stop(VALUE _self);
+static long timestamp_microseconds(void);
+static void render_event(const char *event_name);
 
+// Global mutable state
 static FILE *output_file = NULL;
 static long started_tracing_at_microseconds = 0;
+static bool first_event = true;
+static pid_t process_id = 0;
 
 void Init_gvl_tracing_native_extension(void) {
   VALUE gvl_tracing_module = rb_define_module("GvlTracing");
@@ -40,7 +47,7 @@ void Init_gvl_tracing_native_extension(void) {
   rb_define_singleton_method(gvl_tracing_module, "stop", tracing_stop, 0);
 }
 
-VALUE tracing_start(VALUE _self, VALUE output_path) {
+static VALUE tracing_start(VALUE _self, VALUE output_path) {
   Check_Type(output_path, T_STRING);
 
   if (output_file != NULL) rb_raise(rb_eRuntimeError, "Already started");
@@ -48,12 +55,20 @@ VALUE tracing_start(VALUE _self, VALUE output_path) {
   if (output_file == NULL) rb_syserr_fail(errno, "Failed to open GvlTracing output file");
 
   started_tracing_at_microseconds = timestamp_microseconds();
+  first_event = true;
+  process_id = getpid();
+
+  fprintf(output_file, "[\n");
+  render_event("started_tracing");
 
   return Qtrue;
 }
 
-VALUE tracing_stop(VALUE _self) {
+static VALUE tracing_stop(VALUE _self) {
   if (output_file == NULL) rb_raise(rb_eRuntimeError, "Tracing not running");
+
+  render_event("stopped_tracing");
+  fprintf(output_file, "\n]\n");
 
   if (fclose(output_file) != 0) rb_syserr_fail(errno, "Failed to close GvlTracing output file");
 
@@ -62,8 +77,38 @@ VALUE tracing_stop(VALUE _self) {
   return Qtrue;
 }
 
-long timestamp_microseconds(void) {
+static long timestamp_microseconds(void) {
   struct timespec current_monotonic;
   if (clock_gettime(CLOCK_MONOTONIC, &current_monotonic) != 0) rb_syserr_fail(errno, "Failed to read CLOCK_MONOTONIC");
   return (current_monotonic.tv_nsec / 1000) + (current_monotonic.tv_sec * 1000 * 1000);
+}
+
+// Render output using trace event format for perfetto:
+// https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/trace-event-format.md
+static void render_event(const char *event_name) {
+  // Deal with JSON not having hanging commas...
+  if (first_event) {
+    first_event = false;
+  } else {
+    fprintf(output_file, ",\n");
+  }
+
+  // Event data
+  long now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
+  pid_t thread_id = gettid();
+
+  // Each event is converted into two events in the output: one that signals the end of the previous event
+  // (whatever it was), and one that signals the start of the actual event we're processing.
+  // Yes this is seems to be bending a bit the intention of the output format, but it seemed easier to do this way.
+
+  fprintf(output_file,
+    // Finish previous duration
+    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %u, \"ts\": %lu},\n" \
+    // Current event
+    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %u, \"ts\": %lu, \"name\": \"%s\"}",
+    // Args for first line
+    process_id, thread_id, now_microseconds,
+    // Args for second line
+    process_id, thread_id, now_microseconds, event_name
+  );
 }
