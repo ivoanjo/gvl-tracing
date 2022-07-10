@@ -4,9 +4,48 @@
 :toclevels: 4
 :toc-title:
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/gvl/tracing`. To experiment with that code, run `bin/console` for an interactive prompt.
+A Ruby gem for getting a timeline view of Global VM Lock usage in your Ruby app that can be analyzed using the https://ui.perfetto.dev/[Perfetto UI].
 
-TODO: Delete this and the text above, and describe your gem
+image::preview.png[]
+
+See my blog post **FIXME** for more details!
+
+NOTE: This gem only works on Ruby 3.2 and above because it depends on the new https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API]. See below for an easy way to run Ruby 3.2 inside docker.
+
+== Quickest start
+
+You can play with the output of running the following example:
+
+[source,ruby]
+----
+require "gvl-tracing"
+
+def fib(n)
+  return n if n <= 1
+  fib(n - 1) + fib(n - 2)
+end
+
+GvlTracing.start("example1.json")
+
+Thread.new { sleep(0.05) while true }
+
+sleep(0.05)
+
+3.times.map { Thread.new { fib(37) } }.map(&:join)
+
+sleep(0.05)
+
+GvlTracing.stop
+----
+
+To do so:
+
+1. Download link:examples/example1.json.gz[]
+2. Navigate to https://ui.perfetto.dev/ and use the **Open trace file** option to load the file
+
+== Quick start using docker
+
+**FIXME: TODO**
 
 == Installation
 
@@ -26,11 +65,16 @@ $ gem install gvl-tracing
 
 == Usage
 
-TODO: Write usage instructions here
+Use `require "gvl-tracing"` to load the gem.
+
+This gem only provides a single module (`GvlTracing`) with methods:
+
+* `start(filename)`: Starts tracing, writing the results to the provided filename
+* `stop`: Stops tracing
+
+The resulting traces can be analyzed by going to https://ui.perfetto.dev/[Perfetto UI].
 
 == Development
-
-After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to https://rubygems.org[rubygems.org].
 
