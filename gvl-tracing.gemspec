@@ -46,4 +46,5 @@ Gem::Specification.new do |spec|
     end
   end
   spec.require_paths = ["lib", "ext"]
+  spec.extensions = ["ext/gvl_tracing_native_extension/extconf.rb"]
 end

@@ -23,11 +23,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# frozen_string_literal: true
-
-require_relative "gvl_tracing/version"
-
-require "gvl_tracing_native_extension"
-
-module GvlTracing
+if ["jruby", "truffleruby"].include?(RUBY_ENGINE)
+  raise \
+    "\n#{"-" * 80}\nSorry! This gem is unsupported on #{RUBY_ENGINE}. Since it relies on a lot of guts of MRI Ruby, " \
+    "it's impossible to make a direct port.\n" \
+    "Perhaps a #{RUBY_ENGINE} equivalent could be created -- help is welcome! :)\n#{"-" * 80}"
 end
+
+require "mkmf"
+
+create_makefile "gvl_tracing_native_extension"
