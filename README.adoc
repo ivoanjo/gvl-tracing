@@ -8,7 +8,7 @@ A Ruby gem for getting a timeline view of Global VM Lock usage in your Ruby app 
 
 image::preview.png[]
 
-See my blog post **FIXME** for more details!
+See my blog post https://ivoanjo.me/blog/2022/07/17/tracing-ruby-global-vm-lock/[tracing ruby's (global) vm lock] for more details!
 
 NOTE: This gem only works on Ruby 3.2 and above because it depends on the new https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API]. See below for an easy way to run Ruby 3.2 inside docker.
 
