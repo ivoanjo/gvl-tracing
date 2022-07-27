@@ -138,6 +138,9 @@ static void render_event(const char *event_name) {
   // (whatever it was), and one that signals the start of the actual event we're processing.
   // Yes, this seems to be slightly bending the intention of the output format, but it seemed easier to do this way.
 
+  // Important note: We've observed some rendering issues in perfetto if the tid or pid are numbers that are "too big",
+  // see https://github.com/ivoanjo/gvl-tracing/pull/4#issuecomment-1196463364 for an example.
+
   fprintf(output_file,
     // Finish previous duration
     "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %u, \"ts\": %f},\n" \
