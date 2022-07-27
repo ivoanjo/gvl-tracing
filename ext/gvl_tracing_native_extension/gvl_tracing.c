@@ -37,11 +37,13 @@ static double timestamp_microseconds(void);
 static void render_event(const char *event_name);
 static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 static void on_gc_event(VALUE tpval, void *_unused1);
-static rb_atomic_t thread_serial = 0;
+
+// Thread-local state
 static _Thread_local bool current_thread_serial_set = false;
 static _Thread_local unsigned int current_thread_serial = 0;
 
 // Global mutable state
+static rb_atomic_t thread_serial = 0;
 static FILE *output_file = NULL;
 static rb_internal_thread_event_hook_t *current_hook = NULL;
 static double started_tracing_at_microseconds = 0;
