@@ -136,7 +136,7 @@ static void render_event(const char *event_name) {
 
   // Each event is converted into two events in the output: one that signals the end of the previous event
   // (whatever it was), and one that signals the start of the actual event we're processing.
-  // Yes this is seems to be bending a bit the intention of the output format, but it seemed easier to do this way.
+  // Yes, this seems to be slightly bending the intention of the output format, but it seemed easier to do this way.
 
   fprintf(output_file,
     // Finish previous duration
