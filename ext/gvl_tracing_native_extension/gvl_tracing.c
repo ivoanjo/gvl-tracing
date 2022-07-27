@@ -125,8 +125,8 @@ static void on_event(rb_event_flag_t event_id, const rb_internal_thread_event_da
   const char* event_name = "bug_unknown_event";
   switch (event_id) {
     case RUBY_INTERNAL_THREAD_EVENT_READY:     event_name = "ready";     break;
-    case RUBY_INTERNAL_THREAD_EVENT_RESUMED:   event_name = "resumed";   break;
-    case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED: event_name = "suspended"; break;
+    case RUBY_INTERNAL_THREAD_EVENT_RESUMED:   event_name = "running";   break;
+    case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED: event_name = "waiting";   break;
     case RUBY_INTERNAL_THREAD_EVENT_STARTED:   event_name = "started";   break;
     case RUBY_INTERNAL_THREAD_EVENT_EXITED:    event_name = "exited";    break;
   };
