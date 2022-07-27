@@ -25,16 +25,19 @@
 
 #include <ruby/ruby.h>
 #include <ruby/thread.h>
+#include <ruby/atomic.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <sys/types.h>
-#include <unistd.h>
 
 static VALUE tracing_start(VALUE _self, VALUE output_path);
 static VALUE tracing_stop(VALUE _self);
 static double timestamp_microseconds(void);
 static void render_event(const char *event_name);
 static void on_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
+static rb_atomic_t thread_serial = 0;
+static _Thread_local bool current_thread_serial_set = false;
+static _Thread_local unsigned int current_thread_serial = 0;
 
 // Global mutable state
 static FILE *output_file = NULL;
@@ -47,6 +50,14 @@ void Init_gvl_tracing_native_extension(void) {
 
   rb_define_singleton_method(gvl_tracing_module, "start", tracing_start, 1);
   rb_define_singleton_method(gvl_tracing_module, "stop", tracing_stop, 0);
+}
+
+static inline unsigned int current_thread_id(void) {
+    if (!current_thread_serial_set) {
+        current_thread_serial_set = true;
+        current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
+    }
+    return (unsigned int)current_thread_serial;
 }
 
 static VALUE tracing_start(VALUE _self, VALUE output_path) {
@@ -103,7 +114,7 @@ static double timestamp_microseconds(void) {
 static void render_event(const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
-  pid_t thread_id = gettid();
+  unsigned int thread_id = current_thread_id();
 
   // Each event is converted into two events in the output: one that signals the end of the previous event
   // (whatever it was), and one that signals the start of the actual event we're processing.
