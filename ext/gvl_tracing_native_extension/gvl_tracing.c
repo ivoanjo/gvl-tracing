@@ -31,6 +31,16 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
+#include "extconf.h"
+
+#ifdef HAVE_PTHREAD_H
+  #include <pthread.h>
+#endif
+
+#ifdef HAVE_GETTID
+  #include <unistd.h>
+#endif
+
 static VALUE tracing_start(VALUE _self, VALUE output_path);
 static VALUE tracing_stop(VALUE _self);
 static double timestamp_microseconds(void);
@@ -59,12 +69,31 @@ void Init_gvl_tracing_native_extension(void) {
   rb_define_singleton_method(gvl_tracing_module, "stop", tracing_stop, 0);
 }
 
-static inline unsigned int current_thread_id(void) {
-    if (!current_thread_serial_set) {
-        current_thread_serial_set = true;
-        current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
-    }
-    return (unsigned int)current_thread_serial;
+static inline void initialize_thread_id(void) {
+  current_thread_serial_set = true;
+  current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
+}
+
+static inline void render_thread_metadata(void) {
+  uint64_t native_thread_id = 0;
+  #ifdef HAVE_GETTID
+    native_thread_id = gettid();
+  #elif HAVE_PTHREAD_THREADID_NP
+    pthread_threadid_np(pthread_self(), &native_thread_id);
+  #else
+    native_thread_id = current_thread_serial; // TODO: Better fallback for Windows?
+  #endif
+
+  char native_thread_name_buffer[64] = "(unnamed)";
+
+  #ifdef HAVE_PTHREAD_GETNAME_NP
+    pthread_getname_np(pthread_self(), native_thread_name_buffer, sizeof(native_thread_name_buffer));
+  #endif
+
+  fprintf(output_file,
+    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %u, \"name\": \"thread_name\", \"args\": {\"name\": \"%lu %s\"}},\n",
+    process_id, current_thread_serial, native_thread_id, native_thread_name_buffer
+  );
 }
 
 static VALUE tracing_start(VALUE _self, VALUE output_path) {
@@ -134,7 +163,13 @@ static double timestamp_microseconds(void) {
 static void render_event(const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
-  unsigned int thread_id = current_thread_id();
+
+  if (!current_thread_serial_set) {
+    initialize_thread_id();
+    render_thread_metadata();
+  }
+
+  unsigned int thread_id = current_thread_serial;
 
   // Each event is converted into two events in the output: one that signals the end of the previous event
   // (whatever it was), and one that signals the start of the actual event we're processing.
