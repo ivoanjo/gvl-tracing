@@ -9,6 +9,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         ruby: ['3.2', head, debug]
+        exclude:
+          - os: windows-latest
+            ruby: debug
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
