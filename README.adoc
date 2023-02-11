@@ -10,7 +10,7 @@ image::preview.png[]
 
 See my blog post https://ivoanjo.me/blog/2022/07/17/tracing-ruby-global-vm-lock/[tracing ruby's (global) vm lock] for more details!
 
-NOTE: This gem only works on Ruby 3.2 and above because it depends on the new https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API]. See below for an easy way to run Ruby 3.2 inside docker.
+NOTE: This gem only works on Ruby 3.2 and above because it depends on the https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API].
 
 == Quickest start
 
@@ -42,26 +42,6 @@ To do so:
 
 1. Download link:https://github.com/ivoanjo/gvl-tracing/blob/master/examples/example1.json.gz?raw=true[`examples/example1.json.gz`]
 2. Navigate to https://ui.perfetto.dev/ and use the **Open trace file** option to load the file
-
-== Quick start using docker
-
-The `gvl-tracing` gem requires Ruby 3.2, which is still under development. If you have docker installed on your machine, you can use the https://hub.docker.com/r/rubylang/ruby[ruby-lang development images] to try it out.
-
-Here's how you can use them:
-
-[source,bash]
-----
-$ cd my_ruby_app/
-$ docker run -v $(pwd):/app -it rubylang/ruby:master-focal
-root@0e0b07edf906:/# cd app/
-root@0e0b07edf906:/app# ruby -v
-ruby 3.2.0dev (2022-07-23T12:42:05Z master 721d154e2f) [x86_64-linux]
-root@0e0b07edf906:/app# gem install gvl-tracing
-Building native extensions. This could take a while...
-Successfully installed gvl-tracing-0.1.1
-1 gem installed
-root@0e0b07edf906:/app# ruby <your app>
-----
 
 == Installation
 
