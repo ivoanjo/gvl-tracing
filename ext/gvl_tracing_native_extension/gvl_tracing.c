@@ -99,7 +99,7 @@ static inline void render_thread_metadata(void) {
 static VALUE tracing_start(VALUE _self, VALUE output_path) {
   Check_Type(output_path, T_STRING);
 
-  if (output_file != NULL) rb_raise(rb_eRuntimeError, "Already started");
+  if (output_file != NULL) rb_raise(rb_eRuntimeError, "Output file already exists or maybe tracing is already running?");
   output_file = fopen(StringValuePtr(output_path), "w");
   if (output_file == NULL) rb_syserr_fail(errno, "Failed to open GvlTracing output file");
 
