@@ -36,6 +36,11 @@ have_func("gettid", "unistd.h")
 have_header("pthread.h")
 have_func("pthread_getname_np", "pthread.h")
 have_func("pthread_threadid_np", "pthread.h")
+append_cflags('-Werror-implicit-function-declaration')
+append_cflags('-Wunused-parameter')
+append_cflags('-Wold-style-definition')
+append_cflags("-Wall")
+append_cflags("-Wextra")
 
 create_header
 create_makefile "gvl_tracing_native_extension"
