@@ -147,7 +147,7 @@ static VALUE tracing_stop(VALUE _self) {
 
   if (fclose(output_file) != 0) rb_syserr_fail(errno, "Failed to close GvlTracing output file");
 
-  output_file == NULL;
+  output_file = NULL;
 
   return Qtrue;
 }
