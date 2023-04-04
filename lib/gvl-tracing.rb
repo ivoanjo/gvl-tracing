@@ -28,6 +28,50 @@
 require_relative "gvl_tracing/version"
 
 require "gvl_tracing_native_extension"
+require "json"
 
 module GvlTracing
+  class << self
+    @@path = "/tmp/gvl-tracing.json"
+
+    def start(file)
+      @@path = file
+      GvlTracingNativeExtension.start(@@path)
+    end
+
+    def stop
+      thread_list = Thread.list
+      GvlTracingNativeExtension.stop
+      set_thread_name(thread_list)
+    end
+
+    private
+
+    def set_thread_name(thread_list)
+      output_file = File.open(@@path)
+      output = output_file.read.split("\n").map do |event|
+        parse_event = JSON.parse(event)
+        thread_id = parse_event.dig("args", "name")
+
+        next(parse_event) unless thread_id
+
+        thread = thread_list.find { |t| t.native_thread_id.to_s == thread_id.strip }
+
+        next(parse_event) unless thread
+
+        parse_event["args"]["name"] = thread_label(thread)
+        parse_event
+      end
+      File.write(@@path, output.to_json)
+    end
+
+    REGEX = /lib(?!.*lib)\/([a-zA-Z-]+)/
+    def thread_label(thread)
+      lib_name = thread.to_s.match(REGEX)
+
+      return thread.name if lib_name.nil?
+
+      "#{thread.name} from #{lib_name[1]}"
+    end
+  end
 end
