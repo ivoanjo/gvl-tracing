@@ -31,38 +31,48 @@ require "gvl_tracing_native_extension"
 require "json"
 
 module GvlTracing
+  @path = "/tmp/gvl-tracing.json"
   class << self
-    @@path = "/tmp/gvl-tracing.json"
-
     def start(file)
-      @@path = file
-      GvlTracing._start(@@path)
+      @path = file
+      GvlTracing._start(@path)
     end
 
     def stop
-      thread_list = Thread.list.select { |t| t.name }
+      thread_list = Thread.list
+
       GvlTracing._stop
+
       set_thread_name(thread_list)
     end
 
     private
 
-    def set_thread_name(thread_list)
-      output_file = File.open(@@path)
+    def set_thread_name(list)
+      threads = aggreate_thread_list(list)
+      output_file = File.open(@path)
       output = output_file.read.split("\n").map do |event|
         parse_event = JSON.parse(event)
         thread_id = parse_event.dig("args", "name")
 
         next(parse_event) unless thread_id
 
-        thread = thread_list.find { |t| t.native_thread_id.to_s == thread_id.strip }
+        label = threads[thread_id.strip.to_i]
 
-        next(parse_event) unless thread
+        next(parse_event) unless label
 
-        parse_event["args"]["name"] = thread_label(thread)
+        parse_event["args"]["name"] = label
         parse_event
       end
-      File.write(@@path, output.to_json)
+      File.write(@path, output.to_json)
+    end
+
+    def aggreate_thread_list(list)
+      list.each_with_object({}) do |t, acc|
+        next unless t.name
+
+        acc[t.native_thread_id] = thread_label(t)
+      end
     end
 
     REGEX = /lib(?!.*lib)\/([a-zA-Z-]+)/
