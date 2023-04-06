@@ -156,7 +156,7 @@ static double timestamp_microseconds(void) {
   return (current_monotonic.tv_nsec / 1000.0) + (current_monotonic.tv_sec * 1000.0 * 1000.0);
 }
 
-// Generate a list of trace event with format for perfetto that will be reformated lib/gvl_tracing:
+// Generate a list of trace event with format for perfetto that will be reformated by lib/gvl_tracing:
 // https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/trace-event-format.md
 static void render_event(const char *event_name) {
   // Event data

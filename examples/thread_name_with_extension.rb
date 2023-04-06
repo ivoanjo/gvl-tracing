@@ -7,7 +7,7 @@ def fib(n)
   fib(n - 1) + fib(n - 2)
 end
 
-GvlTracing.start("examples/thread_name_with_extension.json")
+GvlTracing.start("thread_name_with_extension.json")
 pool = Concurrent::FixedThreadPool.new(5)
 
 40.times do
