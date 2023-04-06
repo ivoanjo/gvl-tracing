@@ -32,16 +32,20 @@ require "json"
 
 module GvlTracing
   @path = "/tmp/gvl-tracing.json"
+
   class << self
+    private :_start
+    private :_stop
+
     def start(file)
       @path = file
-      GvlTracing._start(@path)
+      _start(@path)
     end
 
     def stop
       thread_list = Thread.list
 
-      GvlTracing._stop
+      _stop
 
       set_thread_name(thread_list)
     end
