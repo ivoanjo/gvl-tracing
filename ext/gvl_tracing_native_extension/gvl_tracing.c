@@ -63,10 +63,10 @@ static VALUE gc_tracepoint = Qnil;
 void Init_gvl_tracing_native_extension(void) {
   rb_global_variable(&gc_tracepoint);
 
-  VALUE gvl_tracing_module = rb_define_module("GvlTracingNativeExtension");
+  VALUE gvl_tracing_module = rb_define_module("GvlTracing");
 
-  rb_define_singleton_method(gvl_tracing_module, "start", tracing_start, 1);
-  rb_define_singleton_method(gvl_tracing_module, "stop", tracing_stop, 0);
+  rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 1);
+  rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
 }
 
 static inline void initialize_thread_id(void) {

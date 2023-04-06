@@ -36,12 +36,12 @@ module GvlTracing
 
     def start(file)
       @@path = file
-      GvlTracingNativeExtension.start(@@path)
+      GvlTracing._start(@@path)
     end
 
     def stop
-      thread_list = Thread.list
-      GvlTracingNativeExtension.stop
+      thread_list = Thread.list.select { |t| t.name }
+      GvlTracing._stop
       set_thread_name(thread_list)
     end
 
