@@ -91,7 +91,7 @@ static inline void render_thread_metadata(void) {
   #endif
 
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %u, \"name\": \"thread_name\", \"args\": {\"name\": \"%lu %s\"}}\n",
+    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %u, \"name\": \"thread_name\", \"args\": {\"name\": \"%lu %s\"}},\n",
     process_id, current_thread_serial, native_thread_id, native_thread_name_buffer
   );
 }
@@ -106,6 +106,7 @@ static VALUE tracing_start(VALUE _self, VALUE output_path) {
   started_tracing_at_microseconds = timestamp_microseconds();
   process_id = getpid();
 
+  fprintf(output_file, "[\n");
   render_event("started_tracing");
 
   current_hook = rb_internal_thread_add_event_hook(
@@ -142,6 +143,7 @@ static VALUE tracing_stop(VALUE _self) {
   gc_tracepoint = Qnil;
 
   render_event("stopped_tracing");
+  // closing output file is handled in GvlTracing.stop code
 
   if (fclose(output_file) != 0) rb_syserr_fail(errno, "Failed to close GvlTracing output file");
 
@@ -156,7 +158,7 @@ static double timestamp_microseconds(void) {
   return (current_monotonic.tv_nsec / 1000.0) + (current_monotonic.tv_sec * 1000.0 * 1000.0);
 }
 
-// Generate a list of trace event with format for perfetto that will be reformated by lib/gvl_tracing:
+// Render output using trace event format for perfetto:
 // https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/trace-event-format.md
 static void render_event(const char *event_name) {
   // Event data
@@ -178,9 +180,9 @@ static void render_event(const char *event_name) {
 
   fprintf(output_file,
     // Finish previous duration
-    "{\"ph\": \"E\", \"pid\": %u, \"tid\": %u, \"ts\": %f}\n" \
+    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %u, \"ts\": %f},\n" \
     // Current event
-    "{\"ph\": \"B\", \"pid\": %u, \"tid\": %u, \"ts\": %f, \"name\": \"%s\"}\n",
+    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %u, \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
     process_id, thread_id, now_microseconds,
     // Args for second line

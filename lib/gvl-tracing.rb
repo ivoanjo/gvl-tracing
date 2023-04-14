@@ -47,35 +47,24 @@ module GvlTracing
 
       _stop
 
-      set_thread_name(thread_list)
+      append_thread_name(thread_list)
     end
 
     private
 
-    def set_thread_name(list)
-      threads = aggreate_thread_list(list)
-      output_file = File.open(@path)
-      output = output_file.read.split("\n").map do |event|
-        parse_event = JSON.parse(event)
-        thread_id = parse_event.dig("args", "name")
-
-        next(parse_event) unless thread_id
-
-        label = threads[thread_id.strip.to_i]
-
-        next(parse_event) unless label
-
-        parse_event["args"]["name"] = label
-        parse_event
+    def append_thread_name(list)
+      threads_name = aggreate_thread_list(list).join(",\n")
+      File.open(@path, 'a') do |f|
+        f.puts(threads_name)
+        f.puts("]")
       end
-      File.write(@path, output.to_json)
     end
 
     def aggreate_thread_list(list)
-      list.each_with_object({}) do |t, acc|
+      list.each_with_object([]) do |t, acc|
         next unless t.name
 
-        acc[t.native_thread_id] = thread_label(t)
+        acc << {"ph": "M", "pid": Process.pid, "tid": t.native_thread_id, "name": "thread_name", "args": {"name": thread_label(t)}}.to_json
       end
     end
 
