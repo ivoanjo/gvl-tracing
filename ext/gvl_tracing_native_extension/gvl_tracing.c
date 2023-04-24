@@ -92,8 +92,8 @@ static inline void render_thread_metadata(void) {
   #endif
 
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %llu, \"name\": \"thread_name\", \"args\": {\"name\": \"%llu\"}},\n",
-    process_id, native_thread_id, native_thread_id);
+    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %u, \"name\": \"thread_name\", \"args\": {\"name\": \"%llu %s\"}},\n",
+    process_id, current_thread_serial, native_thread_id, native_thread_name_buffer);
 }
 
 static VALUE tracing_start(VALUE _self, VALUE output_path) {
@@ -190,7 +190,7 @@ static void render_event(const char *event_name) {
     // Finish previous duration
     "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %llu, \"ts\": %f},\n" \
     // Current event
-    "  {\"ph\": \"B\", \"pid\": %lu, \"tid\": %llu, \"ts\": %f, \"name\": \"%s\"},\n",
+    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %llu, \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
     process_id, native_thread_id , now_microseconds,
     // Args for second line
