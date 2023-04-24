@@ -76,10 +76,11 @@ static inline void initialize_thread_id(void) {
 
 static inline void render_thread_metadata(void) {
   uint64_t native_thread_id = 0;
-  #ifdef HAVE_GETTID
-    native_thread_id = gettid();
-  #elif HAVE_PTHREAD_THREADID_NP
+
+  #ifdef HAVE_PTHREAD_THREADID_NP
     pthread_threadid_np(pthread_self(), &native_thread_id);
+  #elif HAVE_GETTID
+    native_thread_id = gettid();
   #else
     native_thread_id = current_thread_serial; // TODO: Better fallback for Windows?
   #endif
@@ -91,9 +92,8 @@ static inline void render_thread_metadata(void) {
   #endif
 
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %u, \"name\": \"thread_name\", \"args\": {\"name\": \"%lu %s\"}},\n",
-    process_id, current_thread_serial, native_thread_id, native_thread_name_buffer
-  );
+    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %llu, \"name\": \"thread_name\", \"args\": {\"name\": \"%llu\"}},\n",
+    process_id, native_thread_id, native_thread_id);
 }
 
 static VALUE tracing_start(VALUE _self, VALUE output_path) {
@@ -169,7 +169,15 @@ static void render_event(const char *event_name) {
     render_thread_metadata();
   }
 
-  unsigned int thread_id = current_thread_serial;
+  uint64_t native_thread_id = 0;
+
+  #ifdef HAVE_PTHREAD_THREADID_NP
+    pthread_threadid_np(pthread_self(), &native_thread_id);
+  #elif HAVE_GETTID
+    native_thread_id = gettid();
+  #else
+    native_thread_id = current_thread_serial; // TODO: Better fallback for Windows?
+  #endif
 
   // Each event is converted into two events in the output: one that signals the end of the previous event
   // (whatever it was), and one that signals the start of the actual event we're processing.
@@ -180,13 +188,13 @@ static void render_event(const char *event_name) {
 
   fprintf(output_file,
     // Finish previous duration
-    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %u, \"ts\": %f},\n" \
+    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %llu, \"ts\": %f},\n" \
     // Current event
-    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %u, \"ts\": %f, \"name\": \"%s\"},\n",
+    "  {\"ph\": \"B\", \"pid\": %lu, \"tid\": %llu, \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
-    process_id, thread_id, now_microseconds,
+    process_id, native_thread_id , now_microseconds,
     // Args for second line
-    process_id, thread_id, now_microseconds, event_name
+    process_id, native_thread_id , now_microseconds, event_name
   );
 }
 

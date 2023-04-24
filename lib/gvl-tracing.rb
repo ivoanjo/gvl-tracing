@@ -28,18 +28,15 @@
 require_relative "gvl_tracing/version"
 
 require "gvl_tracing_native_extension"
-require "json"
 
 module GvlTracing
-  @path = "/tmp/gvl-tracing.json"
-
   class << self
     private :_start
     private :_stop
 
     def start(file)
+      _start(file)
       @path = file
-      _start(@path)
     end
 
     def stop
@@ -64,7 +61,7 @@ module GvlTracing
       list.each_with_object([]) do |t, acc|
         next unless t.name
 
-        acc << {"ph": "M", "pid": Process.pid, "tid": t.native_thread_id, "name": "thread_name", "args": {"name": thread_label(t)}}.to_json
+        acc << "{\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{t.native_thread_id}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
       end
     end
 
