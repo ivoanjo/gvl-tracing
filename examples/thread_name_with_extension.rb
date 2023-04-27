@@ -1,4 +1,4 @@
-# conrrent-ruby needs to be installed
+# concurrent-ruby needs to be installed
 require "concurrent"
 require "gvl-tracing"
 
