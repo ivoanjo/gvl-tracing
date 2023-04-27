@@ -85,8 +85,8 @@ static inline void render_thread_metadata(void) {
   #endif
 
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %lu, \"name\": \"thread_name\", \"args\": {\"name\": \"%lu %s\"}},\n",
-    process_id, thread_id, thread_id, native_thread_name_buffer);
+    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %lu, \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
+    process_id, thread_id, native_thread_name_buffer);
 }
 
 static VALUE tracing_start(VALUE _self, VALUE output_path) {
