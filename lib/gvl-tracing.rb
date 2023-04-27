@@ -59,7 +59,7 @@ module GvlTracing
 
     def aggreate_thread_list(list)
       list.each_with_object([]) do |t, acc|
-        next unless t.name
+        next unless t.name || t == Thread.main
 
         acc << "  {\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{t.native_thread_id}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
       end
@@ -67,6 +67,8 @@ module GvlTracing
 
     REGEX = /lib(?!.*lib)\/([a-zA-Z-]+)/
     def thread_label(thread)
+      return "Main Thread" if thread == Thread.main
+
       lib_name = thread.to_s.match(REGEX)
 
       return thread.name if lib_name.nil?
