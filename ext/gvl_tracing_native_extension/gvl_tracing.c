@@ -151,7 +151,7 @@ static double timestamp_microseconds(void) {
   return (current_monotonic.tv_nsec / 1000.0) + (current_monotonic.tv_sec * 1000.0 * 1000.0);
 }
 
-static void set_native_thread_id() {
+static void set_native_thread_id(void) {
   uint64_t native_thread_id = 0;
 
   #ifdef HAVE_PTHREAD_THREADID_NP
