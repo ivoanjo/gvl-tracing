@@ -44,12 +44,12 @@ module GvlTracing
 
       _stop
 
-      append_thread_name(thread_list)
+      append_thread_names(thread_list)
     end
 
     private
 
-    def append_thread_name(list)
+    def append_thread_names(list)
       threads_name = aggreate_thread_list(list).join(",\n")
       File.open(@path, 'a') do |f|
         f.puts(threads_name)
