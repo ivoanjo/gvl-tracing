@@ -84,7 +84,7 @@ static inline void render_thread_metadata(void) {
   #endif
 
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %llu, \"name\": \"thread_name\", \"args\": {\"name\": \"%llu %s\"}},\n",
+    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %lu, \"name\": \"thread_name\", \"args\": {\"name\": \"%lu %s\"}},\n",
     process_id, thread_id, thread_id, native_thread_name_buffer);
 }
 
@@ -186,9 +186,9 @@ static void render_event(const char *event_name) {
 
   fprintf(output_file,
     // Finish previous duration
-    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %llu, \"ts\": %f},\n" \
+    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %lu, \"ts\": %f},\n" \
     // Current event
-    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %llu, \"ts\": %f, \"name\": \"%s\"},\n",
+    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %lu, \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
     process_id, thread_id, now_microseconds,
     // Args for second line
