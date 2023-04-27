@@ -136,7 +136,7 @@ static VALUE tracing_stop(VALUE _self) {
   gc_tracepoint = Qnil;
 
   render_event("stopped_tracing");
-  // closing output file is handled in GvlTracing.stop code
+  // closing the json syntax in the output file is handled in GvlTracing.stop code
 
   if (fclose(output_file) != 0) rb_syserr_fail(errno, "Failed to close GvlTracing output file");
 
