@@ -37,6 +37,11 @@ module GvlTracing
     def start(file)
       _start(file)
       @path = file
+
+      if block_given?
+        yield
+        _stop
+      end
     end
 
     def stop
