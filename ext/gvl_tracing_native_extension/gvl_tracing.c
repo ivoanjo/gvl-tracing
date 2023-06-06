@@ -60,7 +60,7 @@ static void on_gc_event(VALUE tpval, void *_unused1);
 // Thread-local state
 static _Thread_local bool current_thread_seen = false;
 static _Thread_local unsigned int current_thread_serial = 0;
-static _Thread_local long int thread_id = 0;
+static _Thread_local uint64_t thread_id = 0;
 
 // Global mutable state
 static rb_atomic_t thread_serial = 0;
@@ -93,7 +93,7 @@ static inline void render_thread_metadata(void) {
   #endif
 
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %lu, \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
+    "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
     process_id, thread_id, native_thread_name_buffer);
 }
 
@@ -170,7 +170,7 @@ static void set_native_thread_id(void) {
     native_thread_id = current_thread_serial; // TODO: Better fallback for Windows?
   #endif
 
-  thread_id = (long int) native_thread_id;
+  thread_id = native_thread_id;
 }
 
 // Render output using trace event format for perfetto:
@@ -193,9 +193,9 @@ static void render_event(const char *event_name) {
 
   fprintf(output_file,
     // Finish previous duration
-    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %lu, \"ts\": %f},\n" \
+    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f},\n" \
     // Current event
-    "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %lu, \"ts\": %f, \"name\": \"%s\"},\n",
+    "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
     process_id, thread_id, now_microseconds,
     // Args for second line
