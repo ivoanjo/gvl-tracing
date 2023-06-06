@@ -67,7 +67,9 @@ module GvlTracing
 
     REGEX = /lib(?!.*lib)\/([a-zA-Z-]+)/
     def thread_label(thread)
-      return "Main Thread" if thread == Thread.main
+      if thread == Thread.main
+        return thread.name ? thread.name : "Main Thread"
+      end
 
       lib_name = thread.to_s.match(REGEX)
 
