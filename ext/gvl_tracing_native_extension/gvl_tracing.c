@@ -28,6 +28,7 @@
 #include <ruby/thread.h>
 #include <ruby/atomic.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <sys/types.h>
 
@@ -66,7 +67,7 @@ static rb_atomic_t thread_serial = 0;
 static FILE *output_file = NULL;
 static rb_internal_thread_event_hook_t *current_hook = NULL;
 static double started_tracing_at_microseconds = 0;
-static pid_t process_id = 0;
+static int64_t process_id = 0;
 static VALUE gc_tracepoint = Qnil;
 
 void Init_gvl_tracing_native_extension(void) {
@@ -92,7 +93,7 @@ static inline void render_thread_metadata(void) {
   #endif
 
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %lu, \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
+    "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %lu, \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
     process_id, thread_id, native_thread_name_buffer);
 }
 
@@ -192,9 +193,9 @@ static void render_event(const char *event_name) {
 
   fprintf(output_file,
     // Finish previous duration
-    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %lu, \"ts\": %f},\n" \
+    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %lu, \"ts\": %f},\n" \
     // Current event
-    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %lu, \"ts\": %f, \"name\": \"%s\"},\n",
+    "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %lu, \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
     process_id, thread_id, now_microseconds,
     // Args for second line
