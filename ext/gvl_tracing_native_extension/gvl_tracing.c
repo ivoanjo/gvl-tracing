@@ -50,7 +50,7 @@ static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_even
 static void on_gc_event(VALUE tpval, void *_unused1);
 
 // Thread-local state
-static _Thread_local bool current_thread_set = false;
+static _Thread_local bool current_thread_seen = false;
 static _Thread_local unsigned int current_thread_serial = 0;
 static _Thread_local long int thread_id = 0;
 
@@ -72,7 +72,7 @@ void Init_gvl_tracing_native_extension(void) {
 }
 
 static inline void initialize_thread_id(void) {
-  current_thread_set = true;
+  current_thread_seen = true;
   current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
   set_native_thread_id();
 }
@@ -171,7 +171,7 @@ static void render_event(const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
 
-  if (!current_thread_set) {
+  if (!current_thread_seen) {
     initialize_thread_id();
     render_thread_metadata();
   }
