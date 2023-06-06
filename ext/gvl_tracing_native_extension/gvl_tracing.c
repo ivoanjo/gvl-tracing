@@ -41,6 +41,13 @@
   #include <unistd.h>
 #endif
 
+// Used to mark function arguments that are deliberately left unused
+#ifdef __GNUC__
+  #define UNUSED_ARG  __attribute__((unused))
+#else
+  #define UNUSED_ARG
+#endif
+
 static VALUE tracing_start(VALUE _self, VALUE output_path);
 static VALUE tracing_stop(VALUE _self);
 static double timestamp_microseconds(void);
@@ -89,7 +96,7 @@ static inline void render_thread_metadata(void) {
     process_id, thread_id, native_thread_name_buffer);
 }
 
-static VALUE tracing_start(VALUE _self, VALUE output_path) {
+static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
   Check_Type(output_path, T_STRING);
 
   if (output_file != NULL) rb_raise(rb_eRuntimeError, "Already started");
@@ -128,7 +135,7 @@ static VALUE tracing_start(VALUE _self, VALUE output_path) {
   return Qtrue;
 }
 
-static VALUE tracing_stop(VALUE _self) {
+static VALUE tracing_stop(UNUSED_ARG VALUE _self) {
   if (output_file == NULL) rb_raise(rb_eRuntimeError, "Tracing not running");
 
   rb_internal_thread_remove_event_hook(current_hook);
@@ -195,7 +202,7 @@ static void render_event(const char *event_name) {
   );
 }
 
-static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_event_data_t *_unused1, void *_unused2) {
+static void on_thread_event(rb_event_flag_t event_id, UNUSED_ARG const rb_internal_thread_event_data_t *_unused1, UNUSED_ARG void *_unused2) {
   const char* event_name = "bug_unknown_event";
   switch (event_id) {
     case RUBY_INTERNAL_THREAD_EVENT_READY:     event_name = "wants_gvl"; break;
@@ -207,7 +214,7 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
   render_event(event_name);
 }
 
-static void on_gc_event(VALUE tpval, void *_unused1) {
+static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
   const char* event_name = "bug_unknown_event";
   switch (rb_tracearg_event_flag(rb_tracearg_from_tracepoint(tpval))) {
     case RUBY_INTERNAL_EVENT_GC_ENTER: event_name = "gc"; break;
