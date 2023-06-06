@@ -41,6 +41,7 @@ append_cflags("-Wunused-parameter")
 append_cflags("-Wold-style-definition")
 append_cflags("-Wall")
 append_cflags("-Wextra")
+append_cflags("-Werror") if ENV['ENABLE_WERROR'] == 'true'
 
 create_header
 create_makefile "gvl_tracing_native_extension"
