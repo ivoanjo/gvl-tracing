@@ -44,13 +44,15 @@
 static VALUE tracing_start(VALUE _self, VALUE output_path);
 static VALUE tracing_stop(VALUE _self);
 static double timestamp_microseconds(void);
+static void set_native_thread_id(void);
 static void render_event(const char *event_name);
 static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 static void on_gc_event(VALUE tpval, void *_unused1);
 
 // Thread-local state
-static _Thread_local bool current_thread_serial_set = false;
+static _Thread_local bool current_thread_set = false;
 static _Thread_local unsigned int current_thread_serial = 0;
+static _Thread_local long int thread_id = 0;
 
 // Global mutable state
 static rb_atomic_t thread_serial = 0;
@@ -65,25 +67,17 @@ void Init_gvl_tracing_native_extension(void) {
 
   VALUE gvl_tracing_module = rb_define_module("GvlTracing");
 
-  rb_define_singleton_method(gvl_tracing_module, "start", tracing_start, 1);
-  rb_define_singleton_method(gvl_tracing_module, "stop", tracing_stop, 0);
+  rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 1);
+  rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
 }
 
 static inline void initialize_thread_id(void) {
-  current_thread_serial_set = true;
+  current_thread_set = true;
   current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
+  set_native_thread_id();
 }
 
 static inline void render_thread_metadata(void) {
-  uint64_t native_thread_id = 0;
-  #ifdef HAVE_GETTID
-    native_thread_id = gettid();
-  #elif HAVE_PTHREAD_THREADID_NP
-    pthread_threadid_np(pthread_self(), &native_thread_id);
-  #else
-    native_thread_id = current_thread_serial; // TODO: Better fallback for Windows?
-  #endif
-
   char native_thread_name_buffer[64] = "(unnamed)";
 
   #ifdef HAVE_PTHREAD_GETNAME_NP
@@ -91,9 +85,8 @@ static inline void render_thread_metadata(void) {
   #endif
 
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %u, \"name\": \"thread_name\", \"args\": {\"name\": \"%lu %s\"}},\n",
-    process_id, current_thread_serial, native_thread_id, native_thread_name_buffer
-  );
+    "  {\"ph\": \"M\", \"pid\": %u, \"tid\": %lu, \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
+    process_id, thread_id, native_thread_name_buffer);
 }
 
 static VALUE tracing_start(VALUE _self, VALUE output_path) {
@@ -143,7 +136,7 @@ static VALUE tracing_stop(VALUE _self) {
   gc_tracepoint = Qnil;
 
   render_event("stopped_tracing");
-  fprintf(output_file, "]\n");
+  // closing the json syntax in the output file is handled in GvlTracing.stop code
 
   if (fclose(output_file) != 0) rb_syserr_fail(errno, "Failed to close GvlTracing output file");
 
@@ -158,18 +151,30 @@ static double timestamp_microseconds(void) {
   return (current_monotonic.tv_nsec / 1000.0) + (current_monotonic.tv_sec * 1000.0 * 1000.0);
 }
 
+static void set_native_thread_id(void) {
+  uint64_t native_thread_id = 0;
+
+  #ifdef HAVE_PTHREAD_THREADID_NP
+    pthread_threadid_np(pthread_self(), &native_thread_id);
+  #elif HAVE_GETTID
+    native_thread_id = gettid();
+  #else
+    native_thread_id = current_thread_serial; // TODO: Better fallback for Windows?
+  #endif
+
+  thread_id = (long int) native_thread_id;
+}
+
 // Render output using trace event format for perfetto:
 // https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/trace-event-format.md
 static void render_event(const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
 
-  if (!current_thread_serial_set) {
+  if (!current_thread_set) {
     initialize_thread_id();
     render_thread_metadata();
   }
-
-  unsigned int thread_id = current_thread_serial;
 
   // Each event is converted into two events in the output: one that signals the end of the previous event
   // (whatever it was), and one that signals the start of the actual event we're processing.
@@ -180,9 +185,9 @@ static void render_event(const char *event_name) {
 
   fprintf(output_file,
     // Finish previous duration
-    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %u, \"ts\": %f},\n" \
+    "  {\"ph\": \"E\", \"pid\": %u, \"tid\": %lu, \"ts\": %f},\n" \
     // Current event
-    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %u, \"ts\": %f, \"name\": \"%s\"},\n",
+    "  {\"ph\": \"B\", \"pid\": %u, \"tid\": %lu, \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
     process_id, thread_id, now_microseconds,
     // Args for second line

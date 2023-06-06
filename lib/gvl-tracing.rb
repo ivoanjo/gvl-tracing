@@ -30,4 +30,50 @@ require_relative "gvl_tracing/version"
 require "gvl_tracing_native_extension"
 
 module GvlTracing
+  class << self
+    private :_start
+    private :_stop
+
+    def start(file)
+      _start(file)
+      @path = file
+    end
+
+    def stop
+      thread_list = Thread.list
+
+      _stop
+
+      append_thread_names(thread_list)
+    end
+
+    private
+
+    def append_thread_names(list)
+      threads_name = aggreate_thread_list(list).join(",\n")
+      File.open(@path, 'a') do |f|
+        f.puts(threads_name)
+        f.puts("]")
+      end
+    end
+
+    def aggreate_thread_list(list)
+      list.each_with_object([]) do |t, acc|
+        next unless t.name || t == Thread.main
+
+        acc << "  {\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{t.native_thread_id}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
+      end
+    end
+
+    REGEX = /lib(?!.*lib)\/([a-zA-Z-]+)/
+    def thread_label(thread)
+      return "Main Thread" if thread == Thread.main
+
+      lib_name = thread.to_s.match(REGEX)
+
+      return thread.name if lib_name.nil?
+
+      "#{thread.name} from #{lib_name[1]}"
+    end
+  end
 end
