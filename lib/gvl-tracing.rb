@@ -38,8 +38,11 @@ module GvlTracing
       _start(file)
       @path = file
 
-      if block_given?
+      return unless block_given?
+
+      begin
         yield
+      ensure
         _stop
       end
     end
