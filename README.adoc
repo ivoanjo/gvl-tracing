@@ -63,7 +63,7 @@ Use `require "gvl-tracing"` to load the gem.
 
 This gem only provides a single module (`GvlTracing`) with methods:
 
-* `start(filename) &block`: Starts tracing, writing the results to the provided filename. When a block is passed, yileds the block and calls stop.
+* `start(filename, &block)`: Starts tracing, writing the results to the provided filename. When a block is passed, yields the block and calls stop.
 * `stop`: Stops tracing
 
 The resulting traces can be analyzed by going to https://ui.perfetto.dev/[Perfetto UI].
