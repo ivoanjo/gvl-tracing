@@ -25,17 +25,15 @@ def fib(n)
   fib(n - 1) + fib(n - 2)
 end
 
-GvlTracing.start("example1.json")
+GvlTracing.start("example1.json") do
+  Thread.new { sleep(0.05) while true }
 
-Thread.new { sleep(0.05) while true }
+  sleep(0.05)
 
-sleep(0.05)
+  3.times.map { Thread.new { fib(37) } }.map(&:join)
 
-3.times.map { Thread.new { fib(37) } }.map(&:join)
-
-sleep(0.05)
-
-GvlTracing.stop
+  sleep(0.05)
+end
 ----
 
 To do so:
@@ -65,7 +63,7 @@ Use `require "gvl-tracing"` to load the gem.
 
 This gem only provides a single module (`GvlTracing`) with methods:
 
-* `start(filename)`: Starts tracing, writing the results to the provided filename
+* `start(filename, &block)`: Starts tracing, writing the results to the provided filename. When a block is passed, yields the block and calls stop.
 * `stop`: Stops tracing
 
 The resulting traces can be analyzed by going to https://ui.perfetto.dev/[Perfetto UI].
