@@ -61,6 +61,7 @@ static void on_gc_event(VALUE tpval, void *_unused1);
 static _Thread_local bool current_thread_seen = false;
 static _Thread_local unsigned int current_thread_serial = 0;
 static _Thread_local uint64_t thread_id = 0;
+static _Thread_local rb_event_flag_t previous_state = 0;
 
 // Global mutable state
 static rb_atomic_t thread_serial = 0;
@@ -204,6 +205,16 @@ static void render_event(const char *event_name) {
 }
 
 static void on_thread_event(rb_event_flag_t event_id, UNUSED_ARG const rb_internal_thread_event_data_t *_unused1, UNUSED_ARG void *_unused2) {
+  // In some cases, Ruby seems to even multiple suspended events for the same thread in a row (e.g. when multiple threads)
+  // are waiting on a Thread::ConditionVariable.new that gets signaled. We coalesce these events to make the resulting
+  // timeline easier to see.
+  //
+  // I haven't observed other situations where we'd want to coalesce events, but we may apply this to all events in the
+  // future. One annoying thing to remember when generalizing this is how to reset the `previous_state` across multiple
+  // start/stop calls to GvlTracing.
+  if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && event_id == previous_state) return;
+  previous_state = event_id;
+
   const char* event_name = "bug_unknown_event";
   switch (event_id) {
     case RUBY_INTERNAL_THREAD_EVENT_READY:     event_name = "wants_gvl"; break;
