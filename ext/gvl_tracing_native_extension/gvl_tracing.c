@@ -56,12 +56,14 @@ static void set_native_thread_id(void);
 static void render_event(const char *event_name);
 static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 static void on_gc_event(VALUE tpval, void *_unused1);
+static VALUE mark_sleeping(VALUE _self);
 
 // Thread-local state
 static _Thread_local bool current_thread_seen = false;
 static _Thread_local unsigned int current_thread_serial = 0;
 static _Thread_local uint64_t thread_id = 0;
-static _Thread_local rb_event_flag_t previous_state = 0;
+static _Thread_local rb_event_flag_t previous_state = 0; // Used to coalesce similar events
+static _Thread_local bool sleeping = false; // Used to track when a thread is sleeping
 
 // Global mutable state
 static rb_atomic_t thread_serial = 0;
@@ -78,6 +80,7 @@ void Init_gvl_tracing_native_extension(void) {
 
   rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 1);
   rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
+  rb_define_singleton_method(gvl_tracing_module, "mark_sleeping", mark_sleeping, 0);
 }
 
 static inline void initialize_thread_id(void) {
@@ -215,6 +218,13 @@ static void on_thread_event(rb_event_flag_t event_id, UNUSED_ARG const rb_intern
   if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && event_id == previous_state) return;
   previous_state = event_id;
 
+  if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && sleeping) {
+    render_event("sleeping");
+    return;
+  } else {
+    sleeping = false;
+  }
+
   const char* event_name = "bug_unknown_event";
   switch (event_id) {
     case RUBY_INTERNAL_THREAD_EVENT_READY:     event_name = "wants_gvl"; break;
@@ -234,4 +244,9 @@ static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
     case RUBY_INTERNAL_EVENT_GC_EXIT: event_name = "running"; break;
   }
   render_event(event_name);
+}
+
+static VALUE mark_sleeping(VALUE _self) {
+  sleeping = true;
+  return Qnil;
 }
