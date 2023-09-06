@@ -1,4 +1,4 @@
-require 'gvl-tracing'
+require "gvl-tracing"
 
 GvlTracing.start("rk-example1.json")
 

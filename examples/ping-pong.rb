@@ -5,7 +5,7 @@ require "gvl_tracing/sleep_tracking"
 #
 # It demonstrates a big bias for the same thread to acquire a mutex, starving other threads out.
 
-GvlTracing.start("ping-pong#{ENV['RUBY_VARIANT']}.json")
+GvlTracing.start("ping-pong#{ENV["RUBY_VARIANT"]}.json")
 
 at_exit { GvlTracing.stop }
 

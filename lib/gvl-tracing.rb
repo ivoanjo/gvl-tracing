@@ -59,7 +59,7 @@ module GvlTracing
 
     def append_thread_names(list)
       threads_name = aggreate_thread_list(list).join(",\n")
-      File.open(@path, 'a') do |f|
+      File.open(@path, "a") do |f|
         f.puts(threads_name)
         f.puts("]")
       end
@@ -76,7 +76,7 @@ module GvlTracing
     REGEX = /lib(?!.*lib)\/([a-zA-Z-]+)/
     def thread_label(thread)
       if thread == Thread.main
-        return thread.name ? thread.name : "Main Thread"
+        return thread.name || "Main Thread"
       end
 
       lib_name = thread.to_s.match(REGEX)
