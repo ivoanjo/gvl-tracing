@@ -3,3 +3,7 @@ ruby_version: 3.2
 ignore:
   - 'examples/example1.rb':
     - Style/InfiniteLoop
+  - 'examples/example5.rb':
+    - Style/InfiniteLoop
+  - 'lib/gvl_tracing/sleep_tracking.rb':
+    - Style/MixinUsage
