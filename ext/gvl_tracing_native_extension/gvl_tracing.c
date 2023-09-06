@@ -246,7 +246,7 @@ static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
   render_event(event_name);
 }
 
-static VALUE mark_sleeping(VALUE _self) {
+static VALUE mark_sleeping(UNUSED_ARG VALUE _self) {
   sleeping = true;
   return Qnil;
 }
