@@ -53,7 +53,9 @@ static VALUE tracing_start(VALUE _self, VALUE output_path);
 static VALUE tracing_stop(VALUE _self);
 static double timestamp_microseconds(void);
 static void set_native_thread_id(void);
-static void render_event(const char *event_name);
+static const char* get_event_name(rb_event_flag_t event_id);
+static const char* handle_previous_event(rb_event_flag_t new_event_id);
+static void render_event(const char *event_name, const char *previous_event_name);
 static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 static void on_gc_event(VALUE tpval, void *_unused1);
 static VALUE mark_sleeping(VALUE _self);
@@ -111,8 +113,8 @@ static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
   started_tracing_at_microseconds = timestamp_microseconds();
   process_id = getpid();
 
-  fprintf(output_file, "[\n");
-  render_event("started_tracing");
+  fprintf(output_file, "{ \"traceEvents\": [\n");
+  render_event("started_tracing", "");
 
   current_hook = rb_internal_thread_add_event_hook(
     on_thread_event,
@@ -147,7 +149,7 @@ static VALUE tracing_stop(UNUSED_ARG VALUE _self) {
   rb_tracepoint_disable(gc_tracepoint);
   gc_tracepoint = Qnil;
 
-  render_event("stopped_tracing");
+  render_event("stopped_tracing", get_event_name(previous_state));
   // closing the json syntax in the output file is handled in GvlTracing.stop code
 
   if (fclose(output_file) != 0) rb_syserr_fail(errno, "Failed to close GvlTracing output file");
@@ -177,9 +179,23 @@ static void set_native_thread_id(void) {
   thread_id = native_thread_id;
 }
 
+static const char* get_event_name(rb_event_flag_t event_id) {
+  switch (event_id) {
+    case RUBY_INTERNAL_THREAD_EVENT_READY:     return "wants_gvl";
+    case RUBY_INTERNAL_THREAD_EVENT_RESUMED:   return "running";
+    case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED: return "waiting";
+    case RUBY_INTERNAL_THREAD_EVENT_STARTED:   return "started";
+    case RUBY_INTERNAL_THREAD_EVENT_EXITED:    return "died";
+    case RUBY_INTERNAL_EVENT_GC_ENTER:         return "gc";
+    // TODO: is it possible the thread wasn't running? Might need to save the last state.
+    case RUBY_INTERNAL_EVENT_GC_EXIT:          return "running";
+    default:                                   return "bug_unknown_event";
+  };
+}
+
 // Render output using trace event format for perfetto:
 // https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/trace-event-format.md
-static void render_event(const char *event_name) {
+static void render_event(const char *event_name, const char *previous_event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
 
@@ -195,14 +211,16 @@ static void render_event(const char *event_name) {
   // Important note: We've observed some rendering issues in perfetto if the tid or pid are numbers that are "too big",
   // see https://github.com/ivoanjo/gvl-tracing/pull/4#issuecomment-1196463364 for an example.
 
+  if (strcmp(event_name, "started_tracing") != 0) {
+    fprintf(output_file,
+      // Finish previous duration
+      "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f, \"name\": \"%s\"},\n",
+      process_id, thread_id, now_microseconds, previous_event_name
+    );
+  }
+
   fprintf(output_file,
-    // Finish previous duration
-    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f},\n" \
-    // Current event
     "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f, \"name\": \"%s\"},\n",
-    // Args for first line
-    process_id, thread_id, now_microseconds,
-    // Args for second line
     process_id, thread_id, now_microseconds, event_name
   );
 }
@@ -216,34 +234,29 @@ static void on_thread_event(rb_event_flag_t event_id, UNUSED_ARG const rb_intern
   // future. One annoying thing to remember when generalizing this is how to reset the `previous_state` across multiple
   // start/stop calls to GvlTracing.
   if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && event_id == previous_state) return;
-  previous_state = event_id;
+  const char* previous_event_name = handle_previous_event(event_id);
 
   if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && sleeping) {
-    render_event("sleeping");
+    render_event("sleeping", previous_event_name);
     return;
   } else {
     sleeping = false;
   }
 
-  const char* event_name = "bug_unknown_event";
-  switch (event_id) {
-    case RUBY_INTERNAL_THREAD_EVENT_READY:     event_name = "wants_gvl"; break;
-    case RUBY_INTERNAL_THREAD_EVENT_RESUMED:   event_name = "running";   break;
-    case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED: event_name = "waiting";   break;
-    case RUBY_INTERNAL_THREAD_EVENT_STARTED:   event_name = "started";   break;
-    case RUBY_INTERNAL_THREAD_EVENT_EXITED:    event_name = "died";      break;
-  };
-  render_event(event_name);
+  render_event(get_event_name(event_id), previous_event_name);
 }
 
 static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
-  const char* event_name = "bug_unknown_event";
-  switch (rb_tracearg_event_flag(rb_tracearg_from_tracepoint(tpval))) {
-    case RUBY_INTERNAL_EVENT_GC_ENTER: event_name = "gc"; break;
-    // TODO: is it possible the thread wasn't running? Might need to save the last state.
-    case RUBY_INTERNAL_EVENT_GC_EXIT: event_name = "running"; break;
-  }
-  render_event(event_name);
+  int event_flag = rb_tracearg_event_flag(rb_tracearg_from_tracepoint(tpval));
+  const char* previous_event_name = handle_previous_event(event_flag);
+
+  render_event(get_event_name(event_flag), previous_event_name);
+}
+
+static const char* handle_previous_event(rb_event_flag_t new_event_id) {
+  const char* previous_event_name = previous_state == 0 ? "" : get_event_name(previous_state);
+  previous_state = new_event_id;
+  return previous_event_name;
 }
 
 static VALUE mark_sleeping(UNUSED_ARG VALUE _self) {
