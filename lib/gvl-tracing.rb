@@ -43,7 +43,7 @@ module GvlTracing
       begin
         yield
       ensure
-        _stop
+        stop
       end
     end
 

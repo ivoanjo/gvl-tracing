@@ -28,7 +28,9 @@
 require "bundler/gem_tasks"
 require "standard/rake"
 require "rake/extensiontask"
+require "rspec/core/rake_task"
 
 Rake::ExtensionTask.new("gvl_tracing_native_extension")
+RSpec::Core::RakeTask.new(:spec)
 
-task default: [:compile, :"standard:fix"]
+task default: [:compile, :"standard:fix", :spec]
