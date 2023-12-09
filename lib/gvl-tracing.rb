@@ -61,7 +61,7 @@ module GvlTracing
       threads_name = aggreate_thread_list(list).join(",\n")
       File.open(@path, "a") do |f|
         f.puts(threads_name)
-        f.puts("]")
+        f.puts("]}")
       end
     end
 
