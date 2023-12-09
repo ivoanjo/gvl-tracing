@@ -208,7 +208,7 @@ static void render_event(const char *event_name) {
 }
 
 static void on_thread_event(rb_event_flag_t event_id, UNUSED_ARG const rb_internal_thread_event_data_t *_unused1, UNUSED_ARG void *_unused2) {
-  // In some cases, Ruby seems to even multiple suspended events for the same thread in a row (e.g. when multiple threads)
+  // In some cases, Ruby seems to emit multiple suspended events for the same thread in a row (e.g. when multiple threads)
   // are waiting on a Thread::ConditionVariable.new that gets signaled. We coalesce these events to make the resulting
   // timeline easier to see.
   //
