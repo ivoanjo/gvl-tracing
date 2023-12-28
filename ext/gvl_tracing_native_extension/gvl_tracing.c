@@ -56,6 +56,7 @@
 #endif
 
 typedef struct {
+  VALUE thread;
   bool current_thread_seen;
   unsigned int current_thread_serial;
   uint64_t thread_object_id;
@@ -116,6 +117,7 @@ static thread_meta_t* current_thread_meta(VALUE thread) {
   } else {
     thread_meta = (thread_meta_t*)malloc(sizeof(thread_meta_t));
     memset(thread_meta, 0, sizeof(thread_meta_t));
+    thread_meta->thread = thread;
     thread_meta->thread_object_id = RB_NUM2INT(rb_obj_id(thread));
     rb_internal_thread_specific_set(thread, gvl_tracing_key, (void *)thread_meta);
   }
