@@ -49,6 +49,10 @@ module GvlTracing
 
     def stop
       thread_list = Thread.list
+      thread_list.each { |t|
+        GvlTracing._clean(t)
+        thread_label(t)
+      }
 
       _stop
 
@@ -69,7 +73,8 @@ module GvlTracing
       list.each_with_object([]) do |t, acc|
         next unless t.name || t == Thread.main
 
-        acc << "  {\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{t.native_thread_id}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
+        thread_id = GvlTracing._use_object_id? ? t.object_id : t.native_thread_id
+        acc << "  {\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{thread_id}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
       end
     end
 
