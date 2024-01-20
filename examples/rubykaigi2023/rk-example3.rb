@@ -7,7 +7,10 @@ def counter_loop
   counter += 1 while counter < 1_000_000_000
 end
 
-Thread.new { counter_loop; sleep }
+Thread.new {
+  counter_loop
+  sleep
+}
 3.times { counter_loop }
 
 GvlTracing.stop
