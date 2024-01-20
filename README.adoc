@@ -10,7 +10,7 @@ image::preview.png[]
 
 For instructions and examples on how to use it, see my https://ivoanjo.me/blog/2023/07/23/understanding-the-ruby-global-vm-lock-by-observing-it/[RubyKaigi 2023 talk on "Understanding the Ruby Global VM Lock by observing it"].
 
-NOTE: This gem only works on Ruby 3.2 and above because it depends on the https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API].
+NOTE: This gem only works on Ruby 3.2 and above because it depends on the https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API]. Furthermore, the GVL Instrumentation API does not (as of Ruby 3.2 and 3.3) currently work on Microsoft Windows.
 
 == Quickest start
 
