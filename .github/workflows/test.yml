@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        ruby: ['3.2', head, debug]
+        ruby: ['3.2', '3.3', head, debug]
         exclude:
           - os: windows-latest
             ruby: debug
