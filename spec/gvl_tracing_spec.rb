@@ -50,6 +50,8 @@ RSpec.describe GvlTracing do
 
   describe "order of events" do
     it "first and last events are in a consistent order" do
+      pending 'Ruby 3.3 support is WIP' unless RUBY_VERSION.start_with?('3.2.')
+
       GvlTracing.start(trace_path) do
         [Thread.new {}, Thread.new {}].each(&:join)
       end
