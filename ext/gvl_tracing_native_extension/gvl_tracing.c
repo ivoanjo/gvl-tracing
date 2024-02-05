@@ -53,6 +53,7 @@ typedef struct {
   bool current_thread_seen;
   unsigned int current_thread_serial;
   uint64_t thread_id;
+  VALUE thread;
   rb_event_flag_t previous_state; // Used to coalesce similar events
   bool sleeping; // Used to track when a thread is sleeping
 } thread_local_state;
@@ -65,10 +66,15 @@ static size_t thread_local_state_memsize(UNUSED_ARG const void *data) {
   return sizeof(thread_local_state);
 }
 
+static void thread_local_state_mark(void *data) {
+  thread_local_state *state = (thread_local_state *)data;
+  rb_gc_mark(state->thread); // Marking thread to make sure it stays pinned
+}
+
 static const rb_data_type_t thread_local_state_type = {
   .wrap_struct_name = "GvlTracing::__threadLocal",
   .function = {
-    .dmark = NULL,
+    .dmark = thread_local_state_mark,
     .dfree = RUBY_DEFAULT_FREE,
     .dsize = thread_local_state_memsize,
   },
@@ -79,6 +85,7 @@ static inline thread_local_state *GT_LOCAL_STATE(VALUE thread, bool allocate) {
   thread_local_state *state = rb_internal_thread_specific_get(thread, thread_storage_key);
   if (!state && allocate) {
     VALUE wrapper = TypedData_Make_Struct(rb_cObject, thread_local_state, &thread_local_state_type, state);
+    state->thread = thread;
     rb_thread_local_aset(thread, rb_intern("__gvl_tracing_local_state"), wrapper);
     rb_internal_thread_specific_set(thread, thread_storage_key, state);
     RB_GC_GUARD(wrapper);
@@ -145,9 +152,14 @@ static inline void render_thread_metadata(thread_local_state *state) {
     pthread_getname_np(pthread_self(), native_thread_name_buffer, sizeof(native_thread_name_buffer));
   #endif
 
+  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
+    uint64_t thread_id = (uint64_t)state->thread;
+  #else
+    uint64_t thread_id = state->thread_id;
+  #endif
   fprintf(output_file,
     "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
-    process_id, state->thread_id, native_thread_name_buffer);
+    process_id, thread_id, native_thread_name_buffer);
 }
 
 static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
@@ -246,15 +258,21 @@ static void render_event(thread_local_state *state, const char *event_name) {
   // Important note: We've observed some rendering issues in perfetto if the tid or pid are numbers that are "too big",
   // see https://github.com/ivoanjo/gvl-tracing/pull/4#issuecomment-1196463364 for an example.
 
+  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
+    uint64_t thread_id = (uint64_t)state->thread;
+  #else
+    uint64_t thread_id = state->thread_id;
+  #endif
+
   fprintf(output_file,
     // Finish previous duration
     "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f},\n" \
     // Current event
     "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
-    process_id, state->thread_id, now_microseconds,
+    process_id, thread_id, now_microseconds,
     // Args for second line
-    process_id, state->thread_id, now_microseconds, event_name
+    process_id, thread_id, now_microseconds, event_name
   );
 }
 
@@ -263,6 +281,9 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
     // These events are guaranteed to hold the GVL, so they can allocate
     event_id & (RUBY_INTERNAL_THREAD_EVENT_STARTED | RUBY_INTERNAL_THREAD_EVENT_RESUMED));
   if (!state) return;
+  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
+    if (!state->thread) state->thread = event_data->thread;
+  #endif
   // In some cases, Ruby seems to emit multiple suspended events for the same thread in a row (e.g. when multiple threads)
   // are waiting on a Thread::ConditionVariable.new that gets signaled. We coalesce these events to make the resulting
   // timeline easier to see.
