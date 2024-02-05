@@ -35,6 +35,9 @@ module GvlTracing
     private :_stop
 
     def start(file)
+      Thread.list.each do |thread|
+        _init_local_storage(thread)
+      end
       _start(file)
       @path = file
 

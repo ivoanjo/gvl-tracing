@@ -116,6 +116,7 @@ static double started_tracing_at_microseconds = 0;
 static int64_t process_id = 0;
 static VALUE gc_tracepoint = Qnil;
 
+static VALUE tracing_init_local_storage(VALUE, VALUE);
 static VALUE tracing_start(VALUE _self, VALUE output_path);
 static VALUE tracing_stop(VALUE _self);
 static double timestamp_microseconds(void);
@@ -134,6 +135,7 @@ void Init_gvl_tracing_native_extension(void) {
 
   VALUE gvl_tracing_module = rb_define_module("GvlTracing");
 
+  rb_define_singleton_method(gvl_tracing_module, "_init_local_storage", tracing_init_local_storage, 1);
   rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 1);
   rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
   rb_define_singleton_method(gvl_tracing_module, "mark_sleeping", mark_sleeping, 0);
@@ -160,6 +162,11 @@ static inline void render_thread_metadata(thread_local_state *state) {
   fprintf(output_file,
     "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
     process_id, thread_id, native_thread_name_buffer);
+}
+
+static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE thread) {
+  GT_LOCAL_STATE(thread, true);
+  return Qtrue;
 }
 
 static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {

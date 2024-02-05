@@ -69,4 +69,26 @@ RSpec.describe GvlTracing do
       expect(second.last.name).to eq("died")
     end
   end
+
+  describe "thread already started" do
+    it "has events that would require the GVL" do
+      started = Queue.new
+      finish = Queue.new
+      thread = Thread.new do
+        started << true
+        finish.pop
+      end
+      started.pop
+      GvlTracing.start(trace_path) do
+        finish << true
+        thread.join
+      end
+
+      trace = PerfettoTrace.new(trace_path)
+      traces = trace.events_by_thread
+      # skip the main thread
+      first = traces[traces.keys[1]].filter_map(&:name)
+      expect(first).to include("wants_gvl")
+    end
+  end
 end
