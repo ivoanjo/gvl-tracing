@@ -49,21 +49,18 @@
   #define UNUSED_ARG
 #endif
 
-static VALUE tracing_start(VALUE _self, VALUE output_path);
-static VALUE tracing_stop(VALUE _self);
-static double timestamp_microseconds(void);
-static void set_native_thread_id(void);
-static void render_event(const char *event_name);
-static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
-static void on_gc_event(VALUE tpval, void *_unused1);
-static VALUE mark_sleeping(VALUE _self);
+typedef struct {
+  bool current_thread_seen;
+  unsigned int current_thread_serial;
+  uint64_t thread_id;
+  rb_event_flag_t previous_state; // Used to coalesce similar events
+  bool sleeping; // Used to track when a thread is sleeping
+} thread_local_state;
 
 // Thread-local state
-static _Thread_local bool current_thread_seen = false;
-static _Thread_local unsigned int current_thread_serial = 0;
-static _Thread_local uint64_t thread_id = 0;
-static _Thread_local rb_event_flag_t previous_state = 0; // Used to coalesce similar events
-static _Thread_local bool sleeping = false; // Used to track when a thread is sleeping
+static _Thread_local thread_local_state __thread_local_state = { 0 };
+
+#define GT_LOCAL_STATE() (&__thread_local_state)
 
 // Global mutable state
 static rb_atomic_t thread_serial = 0;
@@ -72,6 +69,15 @@ static rb_internal_thread_event_hook_t *current_hook = NULL;
 static double started_tracing_at_microseconds = 0;
 static int64_t process_id = 0;
 static VALUE gc_tracepoint = Qnil;
+
+static VALUE tracing_start(VALUE _self, VALUE output_path);
+static VALUE tracing_stop(VALUE _self);
+static double timestamp_microseconds(void);
+static void set_native_thread_id(void);
+static void render_event(const char *event_name);
+static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
+static void on_gc_event(VALUE tpval, void *_unused1);
+static VALUE mark_sleeping(VALUE _self);
 
 void Init_gvl_tracing_native_extension(void) {
   rb_global_variable(&gc_tracepoint);
@@ -84,8 +90,9 @@ void Init_gvl_tracing_native_extension(void) {
 }
 
 static inline void initialize_thread_id(void) {
-  current_thread_seen = true;
-  current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
+  thread_local_state *state = GT_LOCAL_STATE();
+  state->current_thread_seen = true;
+  state->current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
   set_native_thread_id();
 }
 
@@ -98,7 +105,7 @@ static inline void render_thread_metadata(void) {
 
   fprintf(output_file,
     "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
-    process_id, thread_id, native_thread_name_buffer);
+    process_id, GT_LOCAL_STATE()->thread_id, native_thread_name_buffer);
 }
 
 static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
@@ -165,16 +172,17 @@ static double timestamp_microseconds(void) {
 
 static void set_native_thread_id(void) {
   uint64_t native_thread_id = 0;
+  thread_local_state *state = GT_LOCAL_STATE();
 
   #ifdef HAVE_PTHREAD_THREADID_NP
     pthread_threadid_np(pthread_self(), &native_thread_id);
   #elif HAVE_GETTID
     native_thread_id = gettid();
   #else
-    native_thread_id = current_thread_serial; // TODO: Better fallback for Windows?
+    native_thread_id = state->current_thread_serial; // TODO: Better fallback for Windows?
   #endif
 
-  thread_id = native_thread_id;
+  state->thread_id = native_thread_id;
 }
 
 // Render output using trace event format for perfetto:
@@ -183,7 +191,7 @@ static void render_event(const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
 
-  if (!current_thread_seen) {
+  if (!GT_LOCAL_STATE()->current_thread_seen) {
     initialize_thread_id();
     render_thread_metadata();
   }
@@ -201,9 +209,9 @@ static void render_event(const char *event_name) {
     // Current event
     "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
-    process_id, thread_id, now_microseconds,
+    process_id, GT_LOCAL_STATE()->thread_id, now_microseconds,
     // Args for second line
-    process_id, thread_id, now_microseconds, event_name
+    process_id, GT_LOCAL_STATE()->thread_id, now_microseconds, event_name
   );
 }
 
@@ -215,14 +223,15 @@ static void on_thread_event(rb_event_flag_t event_id, UNUSED_ARG const rb_intern
   // I haven't observed other situations where we'd want to coalesce events, but we may apply this to all events in the
   // future. One annoying thing to remember when generalizing this is how to reset the `previous_state` across multiple
   // start/stop calls to GvlTracing.
-  if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && event_id == previous_state) return;
-  previous_state = event_id;
+  thread_local_state *state = GT_LOCAL_STATE();
+  if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && event_id == state->previous_state) return;
+  state->previous_state = event_id;
 
-  if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && sleeping) {
+  if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && state->sleeping) {
     render_event("sleeping");
     return;
   } else {
-    sleeping = false;
+    state->sleeping = false;
   }
 
   const char* event_name = "bug_unknown_event";
@@ -247,6 +256,6 @@ static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
 }
 
 static VALUE mark_sleeping(UNUSED_ARG VALUE _self) {
-  sleeping = true;
+  GT_LOCAL_STATE()->sleeping = true;
   return Qnil;
 }
