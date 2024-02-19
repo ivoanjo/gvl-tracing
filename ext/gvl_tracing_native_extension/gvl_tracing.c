@@ -164,8 +164,13 @@ static inline void render_thread_metadata(thread_local_state *state) {
     process_id, thread_id, native_thread_name_buffer);
 }
 
-static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE thread) {
-  GT_LOCAL_STATE(thread, true);
+static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE threads) {
+  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET // 3.3+
+    for (long i = 0, len = RARRAY_LEN(threads); i < len; i++) {
+        VALUE thread = RARRAY_AREF(threads, i);
+        GT_LOCAL_STATE(thread, true);
+    }
+  #endif
   return Qtrue;
 }
 

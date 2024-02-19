@@ -35,10 +35,8 @@ module GvlTracing
     private :_stop
 
     def start(file)
-      Thread.list.each do |thread|
-        _init_local_storage(thread)
-      end
       _start(file)
+      _init_local_storage(Thread.list)
       @path = file
 
       return unless block_given?
