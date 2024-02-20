@@ -156,6 +156,10 @@ static inline void render_thread_metadata(thread_local_state *state) {
 
   #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
     uint64_t thread_id = (uint64_t)state->thread;
+    // For JSON, values above only 53 bits are interoperable
+    #if SIZEOF_VALUE > 4
+      thread_id = ((uint32_t)(thread_id >> 32) ^ (uint32_t)(thread_id & 0xFFFFFFFF));
+    #endif
   #else
     uint64_t thread_id = state->thread_id;
   #endif
@@ -272,6 +276,10 @@ static void render_event(thread_local_state *state, const char *event_name) {
 
   #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
     uint64_t thread_id = (uint64_t)state->thread;
+    // Thread IDs are 32-bit
+    #if SIZEOF_VALUE > 4
+      thread_id = ((uint32_t)(thread_id >> 32) ^ (uint32_t)(thread_id & 0xFFFFFFFF));
+    #endif
   #else
     uint64_t thread_id = state->thread_id;
   #endif
