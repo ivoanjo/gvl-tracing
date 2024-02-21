@@ -12,9 +12,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         ruby: ['3.2', '3.3', head, debug]
+        mn_threads: ["0", "1"]
         exclude:
           - os: windows-latest
             ruby: debug
+          - ruby: "3.2"
+            mn_threads: "1"
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
@@ -22,4 +25,9 @@ jobs:
       with:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true # runs 'bundle install' and caches installed gems automatically
-    - run: bundle exec rake
+    - name: bundle exec rake
+      run: |
+        ruby -v
+        bundle exec rake
+      env:
+        RUBY_MN_THREADS: ${{ matrix.mn_threads }}

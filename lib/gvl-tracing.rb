@@ -36,6 +36,7 @@ module GvlTracing
 
     def start(file)
       _start(file)
+      _init_local_storage(Thread.list)
       @path = file
 
       return unless block_given?

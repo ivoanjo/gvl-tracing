@@ -36,6 +36,8 @@ have_func("gettid", "unistd.h")
 have_header("pthread.h")
 have_func("pthread_getname_np", "pthread.h")
 have_func("pthread_threadid_np", "pthread.h")
+have_func("rb_internal_thread_specific_get", "ruby/thread.h") # 3.3+
+
 append_cflags("-Werror-implicit-function-declaration")
 append_cflags("-Wunused-parameter")
 append_cflags("-Wold-style-definition")
