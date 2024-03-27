@@ -50,7 +50,7 @@
 #endif
 
 typedef struct {
-  bool current_thread_seen;
+  bool initialized;
   unsigned int current_thread_serial;
   uint64_t thread_id;
   VALUE thread;
@@ -139,8 +139,8 @@ void Init_gvl_tracing_native_extension(void) {
   rb_define_singleton_method(gvl_tracing_module, "mark_sleeping", mark_sleeping, 0);
 }
 
-static inline void initialize_thread_id(thread_local_state *state) {
-  state->current_thread_seen = true;
+static inline void initialize_thread_local_state(thread_local_state *state) {
+  state->initialized = true;
   state->current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
   set_native_thread_id(state);
 }
@@ -253,8 +253,8 @@ static void render_event(thread_local_state *state, const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
 
-  if (!state->current_thread_seen) {
-    initialize_thread_id(state);
+  if (!state->initialized) {
+    initialize_thread_local_state(state);
     render_thread_metadata(state);
   }
 
