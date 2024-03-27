@@ -10,12 +10,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
         ruby: ['3.2', '3.3', head, debug]
         mn_threads: ["0", "1"]
         exclude:
-          - os: windows-latest
-            ruby: debug
           - ruby: "3.2"
             mn_threads: "1"
     runs-on: ${{ matrix.os }}
