@@ -30,6 +30,13 @@ if ["jruby", "truffleruby"].include?(RUBY_ENGINE)
     "Perhaps a #{RUBY_ENGINE} equivalent could be created -- help is welcome! :)\n#{"-" * 80}"
 end
 
+if Gem.win_platform?
+  raise \
+    "\n#{"-" * 80}\nSorry! This gem is currently unsupported on Microsoft Windows. That's because Ruby's GVL " \
+    "instrumentation API, which it relies on, also doesn't work on Windows.\n" \
+    "Hint: This gem does work on WSL."
+end
+
 require "mkmf"
 
 have_func("gettid", "unistd.h")
