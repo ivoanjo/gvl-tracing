@@ -62,9 +62,7 @@ typedef struct {
 
 static int thread_storage_key = 0;
 
-static size_t thread_local_state_memsize(UNUSED_ARG const void *data) {
-  return sizeof(thread_local_state);
-}
+static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused) { return sizeof(thread_local_state); }
 
 static void thread_local_state_mark(void *data) {
   thread_local_state *state = (thread_local_state *)data;
@@ -204,15 +202,8 @@ static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
     NULL
   );
 
-  gc_tracepoint = rb_tracepoint_new(
-    0,
-    (
-      RUBY_INTERNAL_EVENT_GC_ENTER |
-      RUBY_INTERNAL_EVENT_GC_EXIT
-    ),
-    on_gc_event,
-    (void *) NULL
-  );
+  gc_tracepoint = rb_tracepoint_new(0, (RUBY_INTERNAL_EVENT_GC_ENTER | RUBY_INTERNAL_EVENT_GC_EXIT), on_gc_event, NULL);
+
   rb_tracepoint_enable(gc_tracepoint);
 
   return Qtrue;
