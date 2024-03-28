@@ -64,54 +64,6 @@ typedef struct {
   bool sleeping; // Used to track when a thread is sleeping
 } thread_local_state;
 
-#ifdef RUBY_3_3_PLUS
-
-static int thread_storage_key = 0;
-
-static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused) { return sizeof(thread_local_state); }
-
-static void thread_local_state_mark(void *data) {
-  thread_local_state *state = (thread_local_state *)data;
-  rb_gc_mark(state->thread); // Marking thread to make sure it stays pinned
-}
-
-static const rb_data_type_t thread_local_state_type = {
-  .wrap_struct_name = "GvlTracing::__threadLocal",
-  .function = {
-    .dmark = thread_local_state_mark,
-    .dfree = RUBY_DEFAULT_FREE,
-    .dsize = thread_local_state_memsize,
-  },
-  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED,
-};
-
-static inline thread_local_state *GT_LOCAL_STATE(VALUE thread, bool allocate) {
-  thread_local_state *state = rb_internal_thread_specific_get(thread, thread_storage_key);
-  if (!state && allocate) {
-    VALUE wrapper = TypedData_Make_Struct(rb_cObject, thread_local_state, &thread_local_state_type, state);
-    state->thread = thread;
-    rb_thread_local_aset(thread, rb_intern("__gvl_tracing_local_state"), wrapper);
-    rb_internal_thread_specific_set(thread, thread_storage_key, state);
-    RB_GC_GUARD(wrapper);
-  }
-  return state;
-}
-
-#define GT_EVENT_LOCAL_STATE(event_data, allocate) GT_LOCAL_STATE(event_data->thread, allocate)
-// Must only be called from a thread holding the GVL
-#define GT_CURRENT_THREAD_LOCAL_STATE() GT_LOCAL_STATE(rb_thread_current(), true)
-
-#else // < 3.3
-
-// Thread-local state
-static _Thread_local thread_local_state __thread_local_state = { 0 };
-
-#define GT_LOCAL_STATE(thread, allocate) (&__thread_local_state)
-#define GT_EVENT_LOCAL_STATE(event_data, allocate) (&__thread_local_state)
-#define GT_CURRENT_THREAD_LOCAL_STATE() (&__thread_local_state)
-
-#endif
-
 // Global mutable state
 static rb_atomic_t thread_serial = 0;
 static FILE *output_file = NULL;
@@ -119,6 +71,8 @@ static rb_internal_thread_event_hook_t *current_hook = NULL;
 static double started_tracing_at_microseconds = 0;
 static int64_t process_id = 0;
 static VALUE gc_tracepoint = Qnil;
+#pragma GCC diagnostic ignored "-Wunused-variable"
+static int thread_storage_key = 0;
 
 static VALUE tracing_init_local_storage(VALUE, VALUE);
 static VALUE tracing_start(VALUE _self, VALUE output_path);
@@ -129,6 +83,33 @@ static void render_event(thread_local_state *, const char *event_name);
 static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 static void on_gc_event(VALUE tpval, void *_unused1);
 static VALUE mark_sleeping(VALUE _self);
+static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused);
+static void thread_local_state_mark(void *data);
+
+#pragma GCC diagnostic ignored "-Wunused-const-variable"
+static const rb_data_type_t thread_local_state_type = {
+  .wrap_struct_name = "GvlTracing::__threadLocal",
+  .function = {
+    .dmark = thread_local_state_mark,
+    .dfree = RUBY_DEFAULT_FREE,
+    .dsize = thread_local_state_memsize,
+  },
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED,
+};
+
+#ifdef RUBY_3_3_PLUS
+  static inline thread_local_state *GT_LOCAL_STATE(VALUE thread, bool allocate);
+  #define GT_EVENT_LOCAL_STATE(event_data, allocate) GT_LOCAL_STATE(event_data->thread, allocate)
+  // Must only be called from a thread holding the GVL
+  #define GT_CURRENT_THREAD_LOCAL_STATE() GT_LOCAL_STATE(rb_thread_current(), true)
+#else
+  // Thread-local state
+  static _Thread_local thread_local_state __thread_local_state = { 0 };
+
+  #define GT_LOCAL_STATE(thread, allocate) (&__thread_local_state)
+  #define GT_EVENT_LOCAL_STATE(event_data, allocate) (&__thread_local_state)
+  #define GT_CURRENT_THREAD_LOCAL_STATE() (&__thread_local_state)
+#endif
 
 void Init_gvl_tracing_native_extension(void) {
   #ifdef RUBY_3_3_PLUS
@@ -344,3 +325,24 @@ static VALUE mark_sleeping(UNUSED_ARG VALUE _self) {
   GT_CURRENT_THREAD_LOCAL_STATE()->sleeping = true;
   return Qnil;
 }
+
+static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused) { return sizeof(thread_local_state); }
+
+static void thread_local_state_mark(void *data) {
+  thread_local_state *state = (thread_local_state *)data;
+  rb_gc_mark(state->thread); // Marking thread to make sure it stays pinned
+}
+
+#ifdef RUBY_3_3_PLUS
+  static inline thread_local_state *GT_LOCAL_STATE(VALUE thread, bool allocate) {
+    thread_local_state *state = rb_internal_thread_specific_get(thread, thread_storage_key);
+    if (!state && allocate) {
+      VALUE wrapper = TypedData_Make_Struct(rb_cObject, thread_local_state, &thread_local_state_type, state);
+      state->thread = thread;
+      rb_thread_local_aset(thread, rb_intern("__gvl_tracing_local_state"), wrapper);
+      rb_internal_thread_specific_set(thread, thread_storage_key, state);
+      RB_GC_GUARD(wrapper);
+    }
+    return state;
+  }
+#endif
