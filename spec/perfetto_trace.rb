@@ -23,29 +23,25 @@ class PerfettoTrace
       .to_h
   end
 
-  class Row
-    def initialize(row)
-      @row = row
-    end
-
+  Row = Data.define(:row) do
     def meta? = ph == "M"
 
     def phase_begin? = ph == "B"
 
     def phase_end? = ph == "E"
 
-    def phase = @row["ph"]
+    def phase = row["ph"]
 
-    def pid = @row["pid"]
+    def pid = row["pid"]
 
-    def tid = @row["tid"]
+    def tid = row["tid"]
 
-    def ts = @row["ts"]
+    def ts = row["ts"]
 
-    def name = @row["name"]
+    def name = row["name"]
 
-    def args = @row["args"]
+    def args = row["args"]
 
-    def thread_name = @row.dig("args", "name")
+    def thread_name = row.dig("args", "name")
   end
 end

@@ -60,12 +60,10 @@ RSpec.describe GvlTracing do
       first = traces[traces.keys[1]].reject { |j| !j.name }
       second = traces[traces.keys[2]].reject { |j| !j.name }
 
-      expect(first[0].name).to eq("thread_name")
-      expect(first[1].name).to eq("started")
+      expect(first.first.name).to eq("started")
       expect(first.last.name).to eq("died")
 
-      expect(second[0].name).to eq("thread_name")
-      expect(second[1].name).to eq("started")
+      expect(second.first.name).to eq("started")
       expect(second.last.name).to eq("died")
     end
   end

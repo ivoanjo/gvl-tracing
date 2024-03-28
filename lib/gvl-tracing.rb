@@ -88,7 +88,7 @@ module GvlTracing
     end
 
     def thread_id_for(t)
-      RUBY_VERSION.start_with?('3.2.') ? t.native_thread_id : _thread_id_for(t)
+      RUBY_VERSION.start_with?("3.2.") ? t.native_thread_id : _thread_id_for(t)
     end
   end
 end
