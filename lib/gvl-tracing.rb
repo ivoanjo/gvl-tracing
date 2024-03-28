@@ -70,7 +70,9 @@ module GvlTracing
       list.each_with_object([]) do |t, acc|
         next unless t.name || t == Thread.main
 
-        acc << "  {\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{t.native_thread_id}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
+        thread_id = RUBY_VERSION.start_with?('3.2.') ? t.native_thread_id : thread_id_for(t)
+
+        acc << "  {\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{thread_id}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
       end
     end
 

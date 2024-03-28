@@ -87,6 +87,7 @@ static VALUE mark_sleeping(VALUE _self);
 static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused);
 static void thread_local_state_mark(void *data);
 static inline int32_t thread_id_for(thread_local_state *state);
+static VALUE ruby_thread_id_for(UNUSED_ARG VALUE _self, VALUE thread);
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 static const rb_data_type_t thread_local_state_type = {
@@ -126,6 +127,10 @@ void Init_gvl_tracing_native_extension(void) {
   rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 1);
   rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
   rb_define_singleton_method(gvl_tracing_module, "mark_sleeping", mark_sleeping, 0);
+  #ifdef RUBY_3_3_PLUS
+    // On Ruby 3.2 we use the native thread id directly
+    rb_define_singleton_method(gvl_tracing_module, "thread_id_for", ruby_thread_id_for, 1);
+  #endif
 }
 
 static inline void initialize_thread_local_state(thread_local_state *state) {
@@ -347,4 +352,9 @@ static inline int32_t thread_id_for(thread_local_state *state) {
   #else
     return state->native_thread_id;
   #endif
+}
+
+static VALUE ruby_thread_id_for(UNUSED_ARG VALUE _self, VALUE thread) {
+  thread_local_state *state = GT_LOCAL_STATE(thread, true);
+  return INT2FIX(thread_id_for(state));
 }
