@@ -64,7 +64,6 @@ typedef struct {
   VALUE thread;
   rb_event_flag_t previous_state; // Used to coalesce similar events
   bool sleeping; // Used to track when a thread is sleeping
-  bool thread_metadata_rendered;
 } thread_local_state;
 
 // Global mutable state
@@ -152,20 +151,6 @@ static inline void initialize_thread_local_state(thread_local_state *state) {
   #endif
 }
 
-static inline void render_thread_metadata(thread_local_state *state) {
-  char native_thread_name_buffer[64] = "(unnamed)";
-
-  #ifdef HAVE_PTHREAD_GETNAME_NP
-    pthread_getname_np(pthread_self(), native_thread_name_buffer, sizeof(native_thread_name_buffer));
-  #endif
-
-  fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %d, \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
-    process_id, thread_id_for(state), native_thread_name_buffer);
-
-  state->thread_metadata_rendered = true;
-}
-
 static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE threads) {
   #ifdef RUBY_3_3_PLUS
     for (long i = 0, len = RARRAY_LEN(threads); i < len; i++) {
@@ -239,10 +224,6 @@ static double timestamp_microseconds(void) {
 static void render_event(thread_local_state *state, const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
-
-  if (!state->thread_metadata_rendered) {
-    render_thread_metadata(state);
-  }
 
   // Each event is converted into two events in the output: one that signals the end of the previous event
   // (whatever it was), and one that signals the start of the actual event we're processing.
