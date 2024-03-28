@@ -64,6 +64,7 @@ typedef struct {
   VALUE thread;
   rb_event_flag_t previous_state; // Used to coalesce similar events
   bool sleeping; // Used to track when a thread is sleeping
+  bool thread_metadata_rendered;
 } thread_local_state;
 
 // Global mutable state
@@ -164,6 +165,8 @@ static inline void render_thread_metadata(thread_local_state *state) {
   fprintf(output_file,
     "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %d, \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
     process_id, thread_id_for(state), native_thread_name_buffer);
+
+  state->thread_metadata_rendered = true;
 }
 
 static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE threads) {
@@ -242,6 +245,9 @@ static void render_event(thread_local_state *state, const char *event_name) {
 
   if (!state->initialized) {
     initialize_thread_local_state(state);
+  }
+
+  if (!state->thread_metadata_rendered) {
     render_thread_metadata(state);
   }
 
