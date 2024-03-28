@@ -49,6 +49,12 @@
   #define UNUSED_ARG
 #endif
 
+#ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
+  #define RUBY_3_3_PLUS
+#else
+  #define RUBY_3_2
+#endif
+
 typedef struct {
   bool initialized;
   unsigned int current_thread_serial;
@@ -58,7 +64,7 @@ typedef struct {
   bool sleeping; // Used to track when a thread is sleeping
 } thread_local_state;
 
-#ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET // 3.3+
+#ifdef RUBY_3_3_PLUS
 
 static int thread_storage_key = 0;
 
@@ -125,7 +131,7 @@ static void on_gc_event(VALUE tpval, void *_unused1);
 static VALUE mark_sleeping(VALUE _self);
 
 void Init_gvl_tracing_native_extension(void) {
-  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET // 3.3+
+  #ifdef RUBY_3_3_PLUS
     thread_storage_key = rb_internal_thread_specific_key_create();
   #endif
 
@@ -152,7 +158,7 @@ static inline void render_thread_metadata(thread_local_state *state) {
     pthread_getname_np(pthread_self(), native_thread_name_buffer, sizeof(native_thread_name_buffer));
   #endif
 
-  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
+  #ifdef RUBY_3_3_PLUS
     uint64_t thread_id = (uint64_t)state->thread;
     // For JSON, values above only 53 bits are interoperable
     #if SIZEOF_VALUE > 4
@@ -167,7 +173,7 @@ static inline void render_thread_metadata(thread_local_state *state) {
 }
 
 static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE threads) {
-  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET // 3.3+
+  #ifdef RUBY_3_3_PLUS
     for (long i = 0, len = RARRAY_LEN(threads); i < len; i++) {
         VALUE thread = RARRAY_AREF(threads, i);
         GT_LOCAL_STATE(thread, true);
@@ -265,7 +271,7 @@ static void render_event(thread_local_state *state, const char *event_name) {
   // Important note: We've observed some rendering issues in perfetto if the tid or pid are numbers that are "too big",
   // see https://github.com/ivoanjo/gvl-tracing/pull/4#issuecomment-1196463364 for an example.
 
-  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
+  #ifdef RUBY_3_3_PLUS
     uint64_t thread_id = (uint64_t)state->thread;
     // Thread IDs are 32-bit
     #if SIZEOF_VALUE > 4
@@ -292,7 +298,7 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
     // These events are guaranteed to hold the GVL, so they can allocate
     event_id & (RUBY_INTERNAL_THREAD_EVENT_STARTED | RUBY_INTERNAL_THREAD_EVENT_RESUMED));
   if (!state) return;
-  #ifdef HAVE_RB_INTERNAL_THREAD_SPECIFIC_GET
+  #ifdef RUBY_3_3_PLUS
     if (!state->thread) state->thread = event_data->thread;
   #endif
   // In some cases, Ruby seems to emit multiple suspended events for the same thread in a row (e.g. when multiple threads)
