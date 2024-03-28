@@ -110,9 +110,9 @@ static const rb_data_type_t thread_local_state_type = {
   // Thread-local state
   static _Thread_local thread_local_state __thread_local_state = { 0 };
 
-  #define GT_LOCAL_STATE(thread, allocate) (&__thread_local_state)
-  #define GT_EVENT_LOCAL_STATE(event_data, allocate) (&__thread_local_state)
-  #define GT_CURRENT_THREAD_LOCAL_STATE() (&__thread_local_state)
+  static inline thread_local_state *GT_CURRENT_THREAD_LOCAL_STATE(void);
+  #define GT_LOCAL_STATE(thread, allocate) GT_CURRENT_THREAD_LOCAL_STATE()
+  #define GT_EVENT_LOCAL_STATE(event_data, allocate) GT_CURRENT_THREAD_LOCAL_STATE()
 #endif
 
 void Init_gvl_tracing_native_extension(void) {
@@ -240,10 +240,6 @@ static void render_event(thread_local_state *state, const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
 
-  if (!state->initialized) {
-    initialize_thread_local_state(state);
-  }
-
   if (!state->thread_metadata_rendered) {
     render_thread_metadata(state);
   }
@@ -335,6 +331,17 @@ static void thread_local_state_mark(void *data) {
       rb_thread_local_aset(thread, rb_intern("__gvl_tracing_local_state"), wrapper);
       rb_internal_thread_specific_set(thread, thread_storage_key, state);
       RB_GC_GUARD(wrapper);
+      initialize_thread_local_state(state);
+    }
+    return state;
+  }
+#endif
+
+#ifdef RUBY_3_2
+  static inline thread_local_state *GT_CURRENT_THREAD_LOCAL_STATE(void) {
+    thread_local_state *state = &__thread_local_state;
+    if (!state->initialized) {
+      initialize_thread_local_state(state);
     }
     return state;
   }
