@@ -57,8 +57,10 @@
 
 typedef struct {
   bool initialized;
-  unsigned int current_thread_serial;
-  uint64_t thread_id;
+  int32_t current_thread_serial;
+  #ifdef RUBY_3_2
+    int32_t native_thread_id;
+  #endif
   VALUE thread;
   rb_event_flag_t previous_state; // Used to coalesce similar events
   bool sleeping; // Used to track when a thread is sleeping
@@ -78,13 +80,13 @@ static VALUE tracing_init_local_storage(VALUE, VALUE);
 static VALUE tracing_start(VALUE _self, VALUE output_path);
 static VALUE tracing_stop(VALUE _self);
 static double timestamp_microseconds(void);
-static void set_native_thread_id(thread_local_state *);
 static void render_event(thread_local_state *, const char *event_name);
 static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 static void on_gc_event(VALUE tpval, void *_unused1);
 static VALUE mark_sleeping(VALUE _self);
 static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused);
 static void thread_local_state_mark(void *data);
+static inline int32_t thread_id_for(thread_local_state *state);
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 static const rb_data_type_t thread_local_state_type = {
@@ -129,7 +131,22 @@ void Init_gvl_tracing_native_extension(void) {
 static inline void initialize_thread_local_state(thread_local_state *state) {
   state->initialized = true;
   state->current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
-  set_native_thread_id(state);
+
+  #ifdef RUBY_3_2
+    uint32_t native_thread_id = 0;
+
+    #ifdef HAVE_PTHREAD_THREADID_NP
+      pthread_threadid_np(pthread_self(), &native_thread_id);
+    #elif HAVE_GETTID
+      native_thread_id = gettid();
+    #else
+      // Note: We could use the current_thread_serial as a crappy fallback, but this would make getting thread names
+      // not work very well
+      #error No native thread id available?
+    #endif
+
+    state->native_thread_id = native_thread_id;
+  #endif
 }
 
 static inline void render_thread_metadata(thread_local_state *state) {
@@ -139,18 +156,9 @@ static inline void render_thread_metadata(thread_local_state *state) {
     pthread_getname_np(pthread_self(), native_thread_name_buffer, sizeof(native_thread_name_buffer));
   #endif
 
-  #ifdef RUBY_3_3_PLUS
-    uint64_t thread_id = (uint64_t)state->thread;
-    // For JSON, values above only 53 bits are interoperable
-    #if SIZEOF_VALUE > 4
-      thread_id = ((uint32_t)(thread_id >> 32) ^ (uint32_t)(thread_id & 0xFFFFFFFF));
-    #endif
-  #else
-    uint64_t thread_id = state->thread_id;
-  #endif
   fprintf(output_file,
-    "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
-    process_id, thread_id, native_thread_name_buffer);
+    "  {\"ph\": \"M\", \"pid\": %"PRId64", \"tid\": %d, \"name\": \"thread_name\", \"args\": {\"name\": \"%s\"}},\n",
+    process_id, thread_id_for(state), native_thread_name_buffer);
 }
 
 static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE threads) {
@@ -220,20 +228,6 @@ static double timestamp_microseconds(void) {
   return (current_monotonic.tv_nsec / 1000.0) + (current_monotonic.tv_sec * 1000.0 * 1000.0);
 }
 
-static void set_native_thread_id(thread_local_state *state) {
-  uint64_t native_thread_id = 0;
-
-  #ifdef HAVE_PTHREAD_THREADID_NP
-    pthread_threadid_np(pthread_self(), &native_thread_id);
-  #elif HAVE_GETTID
-    native_thread_id = gettid();
-  #else
-    native_thread_id = state->current_thread_serial; // TODO: Better fallback for Windows?
-  #endif
-
-  state->thread_id = native_thread_id;
-}
-
 // Render output using trace event format for perfetto:
 // https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/trace-event-format.md
 static void render_event(thread_local_state *state, const char *event_name) {
@@ -252,25 +246,15 @@ static void render_event(thread_local_state *state, const char *event_name) {
   // Important note: We've observed some rendering issues in perfetto if the tid or pid are numbers that are "too big",
   // see https://github.com/ivoanjo/gvl-tracing/pull/4#issuecomment-1196463364 for an example.
 
-  #ifdef RUBY_3_3_PLUS
-    uint64_t thread_id = (uint64_t)state->thread;
-    // Thread IDs are 32-bit
-    #if SIZEOF_VALUE > 4
-      thread_id = ((uint32_t)(thread_id >> 32) ^ (uint32_t)(thread_id & 0xFFFFFFFF));
-    #endif
-  #else
-    uint64_t thread_id = state->thread_id;
-  #endif
-
   fprintf(output_file,
     // Finish previous duration
-    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f},\n" \
+    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %d, \"ts\": %f},\n" \
     // Current event
-    "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %"PRIu64", \"ts\": %f, \"name\": \"%s\"},\n",
+    "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %d, \"ts\": %f, \"name\": \"%s\"},\n",
     // Args for first line
-    process_id, thread_id, now_microseconds,
+    process_id, thread_id_for(state), now_microseconds,
     // Args for second line
-    process_id, thread_id, now_microseconds, event_name
+    process_id, thread_id_for(state), now_microseconds, event_name
   );
 }
 
@@ -346,3 +330,21 @@ static void thread_local_state_mark(void *data) {
     return state;
   }
 #endif
+
+static inline int32_t thread_id_for(thread_local_state *state) {
+  // We use different strategies for 3.2 vs 3.3+ to identify threads. This is because:
+  //
+  // 1. On 3.2 we have no way of associating the actual thread VALUE object with the state/serial, so instead we identify
+  //    threads by their native ids. This is not entirely correct, since Ruby can reuse native threads (e.g. if a thread
+  //    dies and another immediately gets created) but it's good enough for our purposes. (Associating the thread VALUE
+  //    object is useful to, e.g. get thread names later.)
+  //
+  // 2. On 3.3 we can associate the state/serial with the thread VALUE object AND additionally with the MN scheduler
+  //    the same thread VALUE can end up executing on different native threads so using the native thread id as an
+  //    identifier would be wrong.
+  #ifdef RUBY_3_3_PLUS
+    return state->current_thread_serial;
+  #else
+    return state->native_thread_id;
+  #endif
+}
