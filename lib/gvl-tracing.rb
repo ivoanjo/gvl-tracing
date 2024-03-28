@@ -49,11 +49,11 @@ module GvlTracing
     end
 
     def stop
-      thread_list = Thread.list
-
-      _stop
+      thread_list = _stop
 
       append_thread_names(thread_list)
+
+      trim_all_seen_threads
     end
 
     private

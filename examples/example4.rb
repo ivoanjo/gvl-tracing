@@ -8,6 +8,8 @@ end
 ready_queue = Queue.new
 can_start_queue = Queue.new
 
+GvlTracing.start("example4.json")
+
 threads = 2.times.map do |id|
   Thread.new do
     Thread.current.name = "fib t#{id}"
@@ -18,9 +20,6 @@ threads = 2.times.map do |id|
 end
 
 2.times { ready_queue.pop }
-
-GvlTracing.start("example4.json")
-
 2.times { can_start_queue << true }
 
 threads.map(&:join)

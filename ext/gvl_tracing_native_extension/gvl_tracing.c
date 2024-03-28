@@ -31,6 +31,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <threads.h>
 
 #include "extconf.h"
 
@@ -75,6 +76,8 @@ static int64_t process_id = 0;
 static VALUE gc_tracepoint = Qnil;
 #pragma GCC diagnostic ignored "-Wunused-variable"
 static int thread_storage_key = 0;
+static VALUE all_seen_threads = Qnil;
+static mtx_t all_seen_threads_mutex;
 
 static VALUE tracing_init_local_storage(VALUE, VALUE);
 static VALUE tracing_start(VALUE _self, VALUE output_path);
@@ -88,6 +91,7 @@ static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused);
 static void thread_local_state_mark(void *data);
 static inline int32_t thread_id_for(thread_local_state *state);
 static VALUE ruby_thread_id_for(UNUSED_ARG VALUE _self, VALUE thread);
+static VALUE trim_all_seen_threads(UNUSED_ARG VALUE _self);
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 static const rb_data_type_t thread_local_state_type = {
@@ -120,6 +124,11 @@ void Init_gvl_tracing_native_extension(void) {
   #endif
 
   rb_global_variable(&gc_tracepoint);
+  rb_global_variable(&all_seen_threads);
+
+  all_seen_threads = rb_ary_new();
+
+  if (mtx_init(&all_seen_threads_mutex, mtx_plain) != thrd_success) rb_raise(rb_eRuntimeError, "Failed to initialize GvlTracing mutex");
 
   VALUE gvl_tracing_module = rb_define_module("GvlTracing");
 
@@ -128,6 +137,7 @@ void Init_gvl_tracing_native_extension(void) {
   rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
   rb_define_singleton_method(gvl_tracing_module, "mark_sleeping", mark_sleeping, 0);
   rb_define_singleton_method(gvl_tracing_module, "_thread_id_for", ruby_thread_id_for, 1);
+  rb_define_singleton_method(gvl_tracing_module, "trim_all_seen_threads", trim_all_seen_threads, 0);
 }
 
 static inline void initialize_thread_local_state(thread_local_state *state) {
@@ -163,6 +173,8 @@ static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE threads) {
 
 static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
   Check_Type(output_path, T_STRING);
+
+  trim_all_seen_threads(Qnil);
 
   if (output_file != NULL) rb_raise(rb_eRuntimeError, "Already started");
   output_file = fopen(StringValuePtr(output_path), "w");
@@ -210,7 +222,11 @@ static VALUE tracing_stop(UNUSED_ARG VALUE _self) {
 
   output_file = NULL;
 
-  return Qtrue;
+  #ifdef RUBY_3_3_PLUS
+    return all_seen_threads;
+  #else
+    return rb_funcall(rb_cThread, rb_intern("list"), 0);
+  #endif
 }
 
 static double timestamp_microseconds(void) {
@@ -313,6 +329,13 @@ static void thread_local_state_mark(void *data) {
       rb_internal_thread_specific_set(thread, thread_storage_key, state);
       RB_GC_GUARD(wrapper);
       initialize_thread_local_state(state);
+
+      // Keep thread around, to be able to extract names at the end
+      // We grab a lock here since thread creation can happen in multiple Ractors, and we want to make sure only one
+      // of them is mutating the array at a time. @ivoanjo: I think this is enough to make this safe....?
+      if (mtx_lock(&all_seen_threads_mutex) != thrd_success) rb_raise(rb_eRuntimeError, "Failed to lock GvlTracing mutex");
+      rb_ary_push(all_seen_threads, thread);
+      if (mtx_unlock(&all_seen_threads_mutex) != thrd_success) rb_raise(rb_eRuntimeError, "Failed to unlock GvlTracing mutex");
     }
     return state;
   }
@@ -353,4 +376,23 @@ static VALUE ruby_thread_id_for(UNUSED_ARG VALUE _self, VALUE thread) {
 
   thread_local_state *state = GT_LOCAL_STATE(thread, true);
   return INT2FIX(thread_id_for(state));
+}
+
+// Can only be called while GvlTracing is not active + while holding the GVL
+static VALUE trim_all_seen_threads(UNUSED_ARG VALUE _self) {
+  if (mtx_lock(&all_seen_threads_mutex) != thrd_success) rb_raise(rb_eRuntimeError, "Failed to lock GvlTracing mutex");
+
+  VALUE alive_threads = rb_ary_new();
+
+  for (long i = 0, len = RARRAY_LEN(all_seen_threads); i < len; i++) {
+    VALUE thread = RARRAY_AREF(all_seen_threads, i);
+    if (rb_funcall(thread, rb_intern("alive?"), 0) == Qtrue) {
+      rb_ary_push(alive_threads, thread);
+    }
+  }
+
+  rb_ary_replace(all_seen_threads, alive_threads);
+
+  if (mtx_unlock(&all_seen_threads_mutex) != thrd_success) rb_raise(rb_eRuntimeError, "Failed to unlock GvlTracing mutex");
+  return Qtrue;
 }
