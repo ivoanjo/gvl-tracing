@@ -128,7 +128,7 @@ void Init_gvl_tracing_native_extension(void) {
   rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 1);
   rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
   rb_define_singleton_method(gvl_tracing_module, "mark_sleeping", mark_sleeping, 0);
-  rb_define_singleton_method(gvl_tracing_module, "thread_id_for", ruby_thread_id_for, 1);
+  rb_define_singleton_method(gvl_tracing_module, "_thread_id_for", ruby_thread_id_for, 1);
 }
 
 static inline void initialize_thread_local_state(thread_local_state *state) {

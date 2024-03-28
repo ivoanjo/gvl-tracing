@@ -70,9 +70,7 @@ module GvlTracing
       list.each_with_object([]) do |t, acc|
         next unless t.name || t == Thread.main
 
-        thread_id = RUBY_VERSION.start_with?('3.2.') ? t.native_thread_id : thread_id_for(t)
-
-        acc << "  {\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{thread_id}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
+        acc << "  {\"ph\": \"M\", \"pid\": #{Process.pid}, \"tid\": #{thread_id_for(t)}, \"name\": \"thread_name\", \"args\": {\"name\": \"#{thread_label(t)}\"}}"
       end
     end
 
@@ -88,5 +86,12 @@ module GvlTracing
 
       "#{thread.name} from #{lib_name[1]}"
     end
+
+    def thread_id_for(t)
+      RUBY_VERSION.start_with?('3.2.') ? t.native_thread_id : _thread_id_for(t)
+    end
   end
 end
+
+# Eagerly initialize context for main thread
+GvlTracing.send(:thread_id_for, Thread.main)
