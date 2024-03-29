@@ -26,5 +26,5 @@
 # frozen_string_literal: true
 
 module GvlTracing
-  VERSION = "1.5.2"
+  VERSION = "1.6.0.dev"
 end
