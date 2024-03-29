@@ -264,7 +264,9 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
   thread_local_state *state = GT_EVENT_LOCAL_STATE(event_data,
     // These events are guaranteed to hold the GVL, so they can allocate
     event_id & (RUBY_INTERNAL_THREAD_EVENT_STARTED | RUBY_INTERNAL_THREAD_EVENT_RESUMED));
+
   if (!state) return;
+
   #ifdef RUBY_3_3_PLUS
     if (!state->thread) state->thread = event_data->thread;
   #endif
@@ -299,6 +301,9 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
 static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
   const char* event_name = "bug_unknown_event";
   thread_local_state *state = GT_LOCAL_STATE(rb_thread_current(), false); // no alloc during GC
+
+  if (!state) return;
+
   switch (rb_tracearg_event_flag(rb_tracearg_from_tracepoint(tpval))) {
     case RUBY_INTERNAL_EVENT_GC_ENTER: event_name = "gc"; break;
     // TODO: is it possible the thread wasn't running? Might need to save the last state.
