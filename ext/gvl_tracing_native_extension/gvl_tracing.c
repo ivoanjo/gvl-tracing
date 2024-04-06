@@ -146,7 +146,12 @@ static inline void initialize_thread_local_state(thread_local_state *state) {
     uint32_t native_thread_id = 0;
 
     #ifdef HAVE_PTHREAD_THREADID_NP
-      pthread_threadid_np(pthread_self(), &native_thread_id);
+      uint64_t full_native_thread_id;
+      pthread_threadid_np(pthread_self(), &full_native_thread_id);
+      // Note: `pthread_threadid_np` is declared as taking in a `uint64_t` but I don't think macOS uses such really
+      // high thread ids, and anyway perfetto doesn't like full 64-bit ids for threads so let's go with a simplification
+      // for now.
+      native_thread_id = (uint32_t) full_native_thread_id;
     #elif HAVE_GETTID
       native_thread_id = gettid();
     #else
