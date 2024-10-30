@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        ruby: ['3.2', '3.3', head, debug]
+        ruby: ['3.2', '3.3', '3.4', head, debug]
         mn_threads: ["0", "1"]
         exclude:
           - ruby: "3.2"
