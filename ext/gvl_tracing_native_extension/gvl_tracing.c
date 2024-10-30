@@ -100,6 +100,7 @@ static VALUE ruby_thread_id_for(UNUSED_ARG VALUE _self, VALUE thread);
 static VALUE trim_all_seen_threads(UNUSED_ARG VALUE _self);
 static void render_os_thread_event(thread_local_state *state, double now_microseconds);
 static void finish_previous_os_thread_event(double now_microseconds);
+static inline uint32_t current_native_thread_id(void);
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 static const rb_data_type_t thread_local_state_type = {
@@ -151,24 +152,7 @@ static inline void initialize_thread_local_state(thread_local_state *state) {
   state->current_thread_serial = RUBY_ATOMIC_FETCH_ADD(thread_serial, 1);
 
   #ifdef RUBY_3_2
-    uint32_t native_thread_id = 0;
-
-    #ifdef HAVE_PTHREAD_THREADID_NP
-      uint64_t full_native_thread_id;
-      pthread_threadid_np(pthread_self(), &full_native_thread_id);
-      // Note: `pthread_threadid_np` is declared as taking in a `uint64_t` but I don't think macOS uses such really
-      // high thread ids, and anyway perfetto doesn't like full 64-bit ids for threads so let's go with a simplification
-      // for now.
-      native_thread_id = (uint32_t) full_native_thread_id;
-    #elif HAVE_GETTID
-      native_thread_id = gettid();
-    #else
-      // Note: We could use the current_thread_serial as a crappy fallback, but this would make getting thread names
-      // not work very well
-      #error No native thread id available?
-    #endif
-
-    state->native_thread_id = native_thread_id;
+    state->native_thread_id = current_native_thread_id();
   #endif
 }
 
@@ -443,7 +427,7 @@ static VALUE trim_all_seen_threads(UNUSED_ARG VALUE _self) {
   return Qtrue;
 }
 
-// Creates an event that follows the current native thread (gettid()). Note that this assumes that whatever event
+// Creates an event that follows the current native thread. Note that this assumes that whatever event
 // made us call `render_os_thread_event` is an event about the current (native) thread; if the event is not about the
 // current thread, the results will be incorrect.
 static void render_os_thread_event(thread_local_state *state, double now_microseconds) {
@@ -455,14 +439,35 @@ static void render_os_thread_event(thread_local_state *state, double now_microse
   char color_suffix_hack = ('a' + (thread_id_for(state) % 26));
 
   fprintf(output_file,
-    "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %d, \"ts\": %f, \"name\": \"Thread %d (%c)\"},\n",
-    OS_THREADS_VIEW_PID, gettid(), now_microseconds, thread_id_for(state), color_suffix_hack
+    "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %u, \"ts\": %f, \"name\": \"Thread %d (%c)\"},\n",
+    OS_THREADS_VIEW_PID, current_native_thread_id(), now_microseconds, thread_id_for(state), color_suffix_hack
   );
 }
 
 static void finish_previous_os_thread_event(double now_microseconds) {
   fprintf(output_file,
-    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %d, \"ts\": %f},\n",
-    OS_THREADS_VIEW_PID, gettid(), now_microseconds
+    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %u, \"ts\": %f},\n",
+    OS_THREADS_VIEW_PID, current_native_thread_id(), now_microseconds
   );
+}
+
+static inline uint32_t current_native_thread_id(void) {
+  uint32_t native_thread_id = 0;
+
+  #ifdef HAVE_PTHREAD_THREADID_NP
+    uint64_t full_native_thread_id;
+    pthread_threadid_np(pthread_self(), &full_native_thread_id);
+    // Note: `pthread_threadid_np` is declared as taking in a `uint64_t` but I don't think macOS uses such really
+    // high thread ids, and anyway perfetto doesn't like full 64-bit ids for threads so let's go with a simplification
+    // for now.
+    native_thread_id = (uint32_t) full_native_thread_id;
+  #elif HAVE_GETTID
+    native_thread_id = gettid();
+  #else
+    // Note: We could use a native thread-local crappy fallback, but I think the two above alternatives are available
+    // on all OSs that support the GVL tracing API.
+    #error No native thread id available?
+  #endif
+
+  return native_thread_id;
 }
