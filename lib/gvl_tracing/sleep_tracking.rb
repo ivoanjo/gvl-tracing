@@ -5,7 +5,7 @@
 module GvlTracing::SleepTracking
   def sleep(...)
     GvlTracing.mark_sleeping
-    super(...)
+    super
   end
 end
 
