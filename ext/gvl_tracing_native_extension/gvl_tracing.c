@@ -181,8 +181,14 @@ static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path, VALUE os_t
   process_id = getpid();
   os_threads_view_enabled = (os_threads_view_enabled_arg == Qtrue);
 
+  VALUE ruby_version = rb_const_get(rb_cObject, rb_intern("RUBY_VERSION"));
+  Check_Type(ruby_version, T_STRING);
+
   fprintf(output_file, "[\n");
-  fprintf(output_file, "  {\"ph\": \"M\", \"pid\": %"PRId64", \"name\": \"process_name\", \"args\": {\"name\": \"Ruby threads view\"}},\n", process_id);
+  fprintf(output_file,
+    "  {\"ph\": \"M\", \"pid\": %"PRId64", \"name\": \"process_name\", \"args\": {\"name\": \"Ruby threads view (%s)\"}},\n",
+    process_id, StringValuePtr(ruby_version)
+  );
 
   double now_microseconds = render_event(state, "started_tracing");
 
