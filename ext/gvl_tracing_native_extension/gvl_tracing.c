@@ -183,11 +183,12 @@ static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
   output_file = fopen(StringValuePtr(output_path), "w");
   if (output_file == NULL) rb_syserr_fail(errno, "Failed to open GvlTracing output file");
 
-  fprintf(output_file, "[\n");
-
   thread_local_state *state = GT_CURRENT_THREAD_LOCAL_STATE();
   started_tracing_at_microseconds = timestamp_microseconds();
   process_id = getpid();
+
+  fprintf(output_file, "[\n");
+  fprintf(output_file, "  {\"ph\": \"M\", \"pid\": %"PRId64", \"name\": \"process_name\", \"args\": {\"name\": \"Ruby threads view\"}}\n", process_id);
 
   render_event(state, "started_tracing");
 
