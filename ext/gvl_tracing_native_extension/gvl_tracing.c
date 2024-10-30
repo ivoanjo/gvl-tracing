@@ -32,6 +32,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #include "extconf.h"
 
@@ -56,6 +57,10 @@
   #define RUBY_3_2
 #endif
 
+// For the OS threads view, we emit data as if it was for another pid so it gets grouped separately in perfetto.
+// This is a really big hack, but I couldn't think of a better way?
+#define OS_THREADS_VIEW_PID (INT64_C(0))
+
 typedef struct {
   bool initialized;
   int32_t current_thread_serial;
@@ -78,12 +83,13 @@ static VALUE gc_tracepoint = Qnil;
 static int thread_storage_key = 0;
 static VALUE all_seen_threads = Qnil;
 static pthread_mutex_t all_seen_threads_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool os_threads_view_enabled;
 
 static VALUE tracing_init_local_storage(VALUE, VALUE);
-static VALUE tracing_start(VALUE _self, VALUE output_path);
+static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path, VALUE os_threads_view_enabled_arg);
 static VALUE tracing_stop(VALUE _self);
 static double timestamp_microseconds(void);
-static void render_event(thread_local_state *, const char *event_name);
+static double render_event(thread_local_state *, const char *event_name);
 static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 static void on_gc_event(VALUE tpval, void *_unused1);
 static VALUE mark_sleeping(VALUE _self);
@@ -92,6 +98,8 @@ static void thread_local_state_mark(void *data);
 static inline int32_t thread_id_for(thread_local_state *state);
 static VALUE ruby_thread_id_for(UNUSED_ARG VALUE _self, VALUE thread);
 static VALUE trim_all_seen_threads(UNUSED_ARG VALUE _self);
+static void render_os_thread_event(thread_local_state *state, double now_microseconds);
+static void finish_previous_os_thread_event(double now_microseconds);
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 static const rb_data_type_t thread_local_state_type = {
@@ -131,7 +139,7 @@ void Init_gvl_tracing_native_extension(void) {
   VALUE gvl_tracing_module = rb_define_module("GvlTracing");
 
   rb_define_singleton_method(gvl_tracing_module, "_init_local_storage", tracing_init_local_storage, 1);
-  rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 1);
+  rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 2);
   rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
   rb_define_singleton_method(gvl_tracing_module, "mark_sleeping", mark_sleeping, 0);
   rb_define_singleton_method(gvl_tracing_module, "_thread_id_for", ruby_thread_id_for, 1);
@@ -174,8 +182,9 @@ static VALUE tracing_init_local_storage(UNUSED_ARG VALUE _self, VALUE threads) {
   return Qtrue;
 }
 
-static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
+static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path, VALUE os_threads_view_enabled_arg) {
   Check_Type(output_path, T_STRING);
+  if (os_threads_view_enabled_arg != Qtrue && os_threads_view_enabled_arg != Qfalse) rb_raise(rb_eArgError, "os_threads_view_enabled must be true/false");
 
   trim_all_seen_threads(Qnil);
 
@@ -186,11 +195,17 @@ static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path) {
   thread_local_state *state = GT_CURRENT_THREAD_LOCAL_STATE();
   started_tracing_at_microseconds = timestamp_microseconds();
   process_id = getpid();
+  os_threads_view_enabled = (os_threads_view_enabled_arg == Qtrue);
 
   fprintf(output_file, "[\n");
-  fprintf(output_file, "  {\"ph\": \"M\", \"pid\": %"PRId64", \"name\": \"process_name\", \"args\": {\"name\": \"Ruby threads view\"}}\n", process_id);
+  fprintf(output_file, "  {\"ph\": \"M\", \"pid\": %"PRId64", \"name\": \"process_name\", \"args\": {\"name\": \"Ruby threads view\"}},\n", process_id);
 
-  render_event(state, "started_tracing");
+  double now_microseconds = render_event(state, "started_tracing");
+
+  if (os_threads_view_enabled) {
+    fprintf(output_file, "  {\"ph\": \"M\", \"pid\": %"PRId64", \"name\": \"process_name\", \"args\": {\"name\": \"OS threads view\"}},\n", OS_THREADS_VIEW_PID);
+    render_os_thread_event(state, now_microseconds);
+  }
 
   current_hook = rb_internal_thread_add_event_hook(
     on_thread_event,
@@ -219,7 +234,9 @@ static VALUE tracing_stop(UNUSED_ARG VALUE _self) {
   rb_tracepoint_disable(gc_tracepoint);
   gc_tracepoint = Qnil;
 
-  render_event(state, "stopped_tracing");
+  double now_microseconds = render_event(state, "stopped_tracing");
+  if (os_threads_view_enabled) finish_previous_os_thread_event(now_microseconds);
+
   // closing the json syntax in the output file is handled in GvlTracing.stop code
 
   if (fclose(output_file) != 0) rb_syserr_fail(errno, "Failed to close GvlTracing output file");
@@ -241,7 +258,7 @@ static double timestamp_microseconds(void) {
 
 // Render output using trace event format for perfetto:
 // https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/trace-event-format.md
-static void render_event(thread_local_state *state, const char *event_name) {
+static double render_event(thread_local_state *state, const char *event_name) {
   // Event data
   double now_microseconds = timestamp_microseconds() - started_tracing_at_microseconds;
 
@@ -262,6 +279,8 @@ static void render_event(thread_local_state *state, const char *event_name) {
     // Args for second line
     process_id, thread_id_for(state), now_microseconds, event_name
   );
+
+  return now_microseconds;
 }
 
 static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_event_data_t *event_data, UNUSED_ARG void *_unused2) {
@@ -299,7 +318,15 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
     case RUBY_INTERNAL_THREAD_EVENT_STARTED:   event_name = "started";   break;
     case RUBY_INTERNAL_THREAD_EVENT_EXITED:    event_name = "died";      break;
   };
-  render_event(state, event_name);
+  double now_microseconds = render_event(state, event_name);
+
+  if (os_threads_view_enabled) {
+    if (event_id == RUBY_INTERNAL_THREAD_EVENT_RESUMED) {
+      render_os_thread_event(state, now_microseconds);
+    } else if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED || event_id == RUBY_INTERNAL_THREAD_EVENT_EXITED) {
+      finish_previous_os_thread_event(now_microseconds);
+    }
+  }
 }
 
 static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
@@ -414,4 +441,28 @@ static VALUE trim_all_seen_threads(UNUSED_ARG VALUE _self) {
 
   all_seen_threads_mutex_unlock();
   return Qtrue;
+}
+
+// Creates an event that follows the current native thread (gettid()). Note that this assumes that whatever event
+// made us call `render_os_thread_event` is an event about the current (native) thread; if the event is not about the
+// current thread, the results will be incorrect.
+static void render_os_thread_event(thread_local_state *state, double now_microseconds) {
+  finish_previous_os_thread_event(now_microseconds);
+
+  // Hack: If we name threads as "Thread N", perfetto seems to color them all with the same color, which looks awful.
+  // I did not check the code, but in practice perfetto seems to be doing some kind of hashing based only on regular
+  // chars, so here we append a different letter to each thread to cause the color hashing to differ.
+  char color_suffix_hack = ('a' + (thread_id_for(state) % 26));
+
+  fprintf(output_file,
+    "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %d, \"ts\": %f, \"name\": \"Thread %d (%c)\"},\n",
+    OS_THREADS_VIEW_PID, gettid(), now_microseconds, thread_id_for(state), color_suffix_hack
+  );
+}
+
+static void finish_previous_os_thread_event(double now_microseconds) {
+  fprintf(output_file,
+    "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %d, \"ts\": %f},\n",
+    OS_THREADS_VIEW_PID, gettid(), now_microseconds
+  );
 }

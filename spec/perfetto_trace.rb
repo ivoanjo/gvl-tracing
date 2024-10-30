@@ -18,6 +18,7 @@ class PerfettoTrace
 
   def events_by_thread
     @trace
+      .select { |j| j["tid"] }
       .group_by { |j| j["tid"] }
       .map { |tid, events| [tid, events.map { |j| Row.new(j) }] }
       .to_h

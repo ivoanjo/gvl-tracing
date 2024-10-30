@@ -34,8 +34,8 @@ module GvlTracing
     private :_start
     private :_stop
 
-    def start(file)
-      _start(file)
+    def start(file, os_threads_view_enabled: false)
+      _start(file, os_threads_view_enabled)
       _init_local_storage(Thread.list)
       @path = file
 

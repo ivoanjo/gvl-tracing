@@ -25,7 +25,7 @@ def fib(n)
   fib(n - 1) + fib(n - 2)
 end
 
-GvlTracing.start("example1.json") do
+GvlTracing.start("example1.json", os_threads_view_enabled: false) do
   Thread.new { sleep(0.05) while true }
 
   sleep(0.05)
@@ -67,6 +67,12 @@ This gem only provides a single module (`GvlTracing`) with methods:
 * `stop`: Stops tracing
 
 The resulting traces can be analyzed by going to https://ui.perfetto.dev/[Perfetto UI].
+
+== Experimental features
+
+1. Sleep tracking: Add `require 'gvl_tracing/sleep_tracking'` to add a more specific `sleeping` state for sleeps (which are otherwise rendered as `waiting` without this feature)
+
+2. OS threads view: Pass in `os_threads_view_enabled: true` to `GvlTracing.start` to also render a view of Ruby thread activity from the OS native threads point-of-view. This is useful when using M:N thread scheduling, which is used on Ruby 3.3+ Ractors, and when using the `RUBY_MN_THREADS=1` setting.
 
 == Tips
 
