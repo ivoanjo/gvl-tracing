@@ -14,5 +14,5 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
 
-  config.default_formatter = 'doc'
+  config.default_formatter = "doc"
 end

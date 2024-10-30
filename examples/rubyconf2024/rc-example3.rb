@@ -6,6 +6,9 @@ def counter_loop
 end
 
 GvlTracing.start("rc-example3.json") do
-  Thread.new { counter_loop; sleep }
+  Thread.new {
+    counter_loop
+    sleep
+  }
   3.times { counter_loop }
 end
