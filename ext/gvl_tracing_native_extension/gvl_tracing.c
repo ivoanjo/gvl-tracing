@@ -83,6 +83,7 @@ static VALUE gc_tracepoint = Qnil;
 static int thread_storage_key = 0;
 static VALUE all_seen_threads = Qnil;
 static pthread_mutex_t all_seen_threads_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t output_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool os_threads_view_enabled;
 
 static VALUE tracing_init_local_storage(VALUE, VALUE);
@@ -95,6 +96,8 @@ static void on_gc_event(VALUE tpval, void *_unused1);
 static VALUE mark_sleeping(VALUE _self);
 static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused);
 static void thread_local_state_mark(void *data);
+static inline void output_mutex_lock(void);
+static inline void output_mutex_unlock(void);
 static inline int32_t thread_id_for(thread_local_state *state);
 static VALUE ruby_thread_id_for(UNUSED_ARG VALUE _self, VALUE thread);
 static VALUE trim_all_seen_threads(UNUSED_ARG VALUE _self);
@@ -259,6 +262,7 @@ static double render_event(thread_local_state *state, const char *event_name) {
   // Important note: We've observed some rendering issues in perfetto if the tid or pid are numbers that are "too big",
   // see https://github.com/ivoanjo/gvl-tracing/pull/4#issuecomment-1196463364 for an example.
 
+  output_mutex_lock();
   fprintf(output_file,
     // Finish previous duration
     "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %d, \"ts\": %f},\n" \
@@ -269,6 +273,7 @@ static double render_event(thread_local_state *state, const char *event_name) {
     // Args for second line
     process_id, thread_id_for(state), now_microseconds, event_name
   );
+  output_mutex_unlock();
 
   return now_microseconds;
 }
@@ -353,6 +358,18 @@ static inline void all_seen_threads_mutex_lock(void) {
 static inline void all_seen_threads_mutex_unlock(void) {
   int error = pthread_mutex_unlock(&all_seen_threads_mutex);
   if (error) rb_syserr_fail(error, "Failed to unlock GvlTracing mutex");
+}
+
+static inline void output_mutex_lock(void) {
+  int error = pthread_mutex_lock(&output_mutex);
+  // Can't raise exceptions on error since it gets used from outside the GVL
+  if (error) fprintf(stderr, "Failed to lock the GvlTracing output_mutex");
+}
+
+static inline void output_mutex_unlock(void) {
+  int error = pthread_mutex_unlock(&output_mutex);
+  // Can't raise exceptions on error since it gets used from outside the GVL
+  if (error) fprintf(stderr, "Failed to unlock the GvlTracing output_mutex");
 }
 
 #ifdef RUBY_3_3_PLUS
@@ -444,17 +461,21 @@ static void render_os_thread_event(thread_local_state *state, double now_microse
   // chars, so here we append a different letter to each thread to cause the color hashing to differ.
   char color_suffix_hack = ('a' + (thread_id_for(state) % 26));
 
+  output_mutex_lock();
   fprintf(output_file,
     "  {\"ph\": \"B\", \"pid\": %"PRId64", \"tid\": %u, \"ts\": %f, \"name\": \"Thread %d (%c)\"},\n",
     OS_THREADS_VIEW_PID, current_native_thread_id(), now_microseconds, thread_id_for(state), color_suffix_hack
   );
+  output_mutex_unlock();
 }
 
 static void finish_previous_os_thread_event(double now_microseconds) {
+  output_mutex_lock();
   fprintf(output_file,
     "  {\"ph\": \"E\", \"pid\": %"PRId64", \"tid\": %u, \"ts\": %f},\n",
     OS_THREADS_VIEW_PID, current_native_thread_id(), now_microseconds
   );
+  output_mutex_unlock();
 }
 
 static inline uint32_t current_native_thread_id(void) {
