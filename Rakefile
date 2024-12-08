@@ -34,3 +34,12 @@ Rake::ExtensionTask.new("gvl_tracing_native_extension")
 RSpec::Core::RakeTask.new(:spec)
 
 task default: [:compile, :"standard:fix", :spec]
+
+Rake::Task["build"].enhance { Rake::Task["spec_validate_permissions"].execute }
+
+task :spec_validate_permissions do
+  require "rspec"
+  RSpec.world.reset # If any other tests ran before, flushes them
+  ret = RSpec::Core::Runner.run(["spec/gem_packaging.rb"])
+  raise "Release tests failed! See error output above." if ret != 0
+end
