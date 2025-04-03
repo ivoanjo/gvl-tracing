@@ -23,8 +23,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <ruby/ruby.h>
 #include <ruby/debug.h>
 #include "extconf.h"
+
+int rb_objspace_internal_object_p(VALUE obj);
 
 // Used to mark function arguments that are deliberately left unused
 #ifdef __GNUC__
@@ -33,6 +36,26 @@
   #define UNUSED_ARG
 #endif
 
+static void on_newobj_event(VALUE tpval, void *data);
+static VALUE track_objects_created(VALUE self);
+
 void Init_lowlevel_toolkit_native_extension(void) {
   VALUE lowlevel_toolkit_module = rb_define_module("LowlevelToolkit");
+
+  rb_define_singleton_method(lowlevel_toolkit_module, "track_objects_created", track_objects_created, 0);
+}
+
+static VALUE track_objects_created(VALUE self) {
+  VALUE result = rb_ary_new();
+  VALUE tp = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, on_newobj_event, (void *) result);
+  rb_tracepoint_enable(tp);
+  rb_yield(Qnil);
+  rb_tracepoint_disable(tp);
+  return result;
+}
+
+static void on_newobj_event(VALUE tpval, void *data) {
+  VALUE result = (VALUE) data;
+  VALUE obj = rb_tracearg_object(rb_tracearg_from_tracepoint(tpval));
+  if (!rb_objspace_internal_object_p(obj)) rb_ary_push(result, obj);
 }
