@@ -4,11 +4,11 @@ require "rubygems"
 require "rubygems/package"
 require "rubygems/package/tar_reader"
 require "zlib"
-require "gvl-tracing"
+require "lowlevel-toolkit"
 
 RSpec.describe "gem release process (after packaging)" do
-  let(:gem_version) { GvlTracing::VERSION }
-  let(:packaged_gem_file) { "pkg/gvl-tracing-#{gem_version}.gem" }
+  let(:gem_version) { LowlevelToolkit::VERSION }
+  let(:packaged_gem_file) { "pkg/lowlevel-toolkit-#{gem_version}.gem" }
 
   it "sets the right permissions on the gem files" do
     gem_files = Dir.glob("pkg/*.gem")

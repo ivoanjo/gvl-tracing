@@ -1,7 +1,7 @@
-# gvl-tracing: Ruby gem for getting a timelinew view of GVL usage
-# Copyright (c) 2022 Ivo Anjo <ivo@ivoanjo.me>
+# lowlevel-toolkit: Ruby gem for calling observability APIs
+# Copyright (c) 2025 Ivo Anjo <ivo@ivoanjo.me>
 #
-# This file is part of gvl-tracing.
+# This file is part of lowlevel-toolkit.
 #
 # MIT License
 #
@@ -30,20 +30,7 @@ if ["jruby", "truffleruby"].include?(RUBY_ENGINE)
     "Perhaps a #{RUBY_ENGINE} equivalent could be created -- help is welcome! :)\n#{"-" * 80}"
 end
 
-if Gem.win_platform?
-  raise \
-    "\n#{"-" * 80}\nSorry! This gem is currently unsupported on Microsoft Windows. That's because Ruby's GVL " \
-    "instrumentation API, which it relies on, also doesn't work on Windows.\n" \
-    "Hint: This gem does work on WSL."
-end
-
 require "mkmf"
-
-have_func("gettid", "unistd.h")
-have_header("pthread.h")
-have_func("pthread_getname_np", "pthread.h")
-have_func("pthread_threadid_np", "pthread.h")
-have_func("rb_internal_thread_specific_get", "ruby/thread.h") # 3.3+
 
 append_cflags("-Werror-implicit-function-declaration")
 append_cflags("-Wunused-parameter")
@@ -53,4 +40,4 @@ append_cflags("-Wextra")
 append_cflags("-Werror") if ENV["ENABLE_WERROR"] == "true"
 
 create_header
-create_makefile "gvl_tracing_native_extension"
+create_makefile "lowlevel_toolkit_native_extension"

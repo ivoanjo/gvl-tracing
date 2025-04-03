@@ -11,11 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        ruby: ['3.2', '3.3', '3.4', head, debug]
-        mn_threads: ["0", "1"]
-        exclude:
-          - ruby: "3.2"
-            mn_threads: "1"
+        ruby: ['3.4', head, debug]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v2
@@ -27,5 +23,3 @@ jobs:
       run: |
         ruby -v
         bundle exec rake
-      env:
-        RUBY_MN_THREADS: ${{ matrix.mn_threads }}

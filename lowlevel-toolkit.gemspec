@@ -1,7 +1,7 @@
-# gvl-tracing: Ruby gem for getting a timelinew view of GVL usage
-# Copyright (c) 2022 Ivo Anjo <ivo@ivoanjo.me>
+# lowlevel-toolkit: Ruby gem for calling observability APIs
+# Copyright (c) 2025 Ivo Anjo <ivo@ivoanjo.me>
 #
-# This file is part of gvl-tracing.
+# This file is part of lowlevel-toolkit.
 #
 # MIT License
 #
@@ -25,18 +25,17 @@
 
 # frozen_string_literal: true
 
-require_relative "lib/gvl_tracing/version"
+require_relative "lib/lowlevel_toolkit/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "gvl-tracing"
-  spec.version = GvlTracing::VERSION
+  spec.name = "lowlevel-toolkit"
+  spec.version = LowlevelToolkit::VERSION
   spec.authors = ["Ivo Anjo"]
   spec.email = ["ivo@ivoanjo.me"]
 
-  spec.summary = "Get a timeline view of Global VM Lock usage in your Ruby app"
-  spec.homepage = "https://github.com/ivoanjo/gvl-tracing"
+  spec.summary = "Ruby gem for calling observability APIs"
+  spec.homepage = "https://github.com/ivoanjo/lowlevel-toolkit"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2.0"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
@@ -47,5 +46,5 @@ Gem::Specification.new do |spec|
     end
   end
   spec.require_paths = ["lib", "ext"]
-  spec.extensions = ["ext/gvl_tracing_native_extension/extconf.rb"]
+  spec.extensions = ["ext/lowlevel_toolkit_native_extension/extconf.rb"]
 end

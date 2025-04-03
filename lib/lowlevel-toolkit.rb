@@ -1,7 +1,7 @@
-# gvl-tracing: Ruby gem for getting a timelinew view of GVL usage
-# Copyright (c) 2022 Ivo Anjo <ivo@ivoanjo.me>
+# lowlevel-toolkit: Ruby gem for calling observability APIs
+# Copyright (c) 2025 Ivo Anjo <ivo@ivoanjo.me>
 #
-# This file is part of gvl-tracing.
+# This file is part of lowlevel-toolkit.
 #
 # MIT License
 #
@@ -25,6 +25,9 @@
 
 # frozen_string_literal: true
 
-module GvlTracing
-  VERSION = "1.7.0.dev"
+require_relative "lowlevel_toolkit/version"
+
+require "lowlevel_toolkit_native_extension"
+
+module LowlevelToolkit
 end

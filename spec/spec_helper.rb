@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "bundler/setup"
-require "gvl-tracing"
+require "lowlevel-toolkit"
 require "pry"
 require "pry-byebug"
 
