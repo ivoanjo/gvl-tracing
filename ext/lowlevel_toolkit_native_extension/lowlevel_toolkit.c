@@ -42,7 +42,14 @@ static void on_gc_event_timing(VALUE tpval, void *data);
 static VALUE track_objects_created(VALUE self);
 static VALUE print_gc_timing(VALUE self);
 
-// Utility function to get current monotonic time in nanoseconds
+static void on_gc_finish_init(void);
+static VALUE on_gc_finish(VALUE self, VALUE callback);
+static void on_gc_finish_event(VALUE tpval, void *data);
+static void on_gc_finish_event_postponed(void *data);
+
+static VALUE on_gc_finish_callback = Qnil;
+static rb_postponed_job_handle_t on_gc_finish_id = 0;
+
 static uint64_t get_monotonic_time_ns(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -52,8 +59,11 @@ static uint64_t get_monotonic_time_ns(void) {
 void Init_lowlevel_toolkit_native_extension(void) {
   VALUE lowlevel_toolkit_module = rb_define_module("LowlevelToolkit");
 
+  on_gc_finish_init();
+
   rb_define_singleton_method(lowlevel_toolkit_module, "track_objects_created", track_objects_created, 0);
   rb_define_singleton_method(lowlevel_toolkit_module, "print_gc_timing", print_gc_timing, 0);
+  rb_define_singleton_method(lowlevel_toolkit_module, "on_gc_finish", on_gc_finish, 1);
 }
 
 static VALUE track_objects_created(VALUE self) {
@@ -91,4 +101,30 @@ static void on_gc_event_timing(VALUE tpval, UNUSED_ARG void *data) {
 
     fprintf(stdout, "GC worked for %.2f ms\n", (gc_duration_ns / 1000000.0));
   }
+}
+
+static VALUE on_gc_finish(VALUE self, VALUE callback) {
+  on_gc_finish_callback = callback;
+
+  VALUE tp = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_GC_EXIT, on_gc_finish_event, NULL);
+  rb_tracepoint_enable(tp);
+  rb_yield(Qnil);
+  rb_tracepoint_disable(tp);
+
+  on_gc_finish_callback = Qnil;
+  return Qnil;
+}
+
+static void on_gc_finish_init(void) {
+  rb_global_variable(&on_gc_finish_callback);
+  on_gc_finish_id = rb_postponed_job_preregister(0, on_gc_finish_event_postponed, NULL);
+  if (on_gc_finish_id == POSTPONED_JOB_HANDLE_INVALID) rb_raise(rb_eRuntimeError, "Failed to register postponed job");
+}
+
+static void on_gc_finish_event(UNUSED_ARG VALUE tpval, UNUSED_ARG void *data) {
+  rb_postponed_job_trigger(on_gc_finish_id);
+}
+
+static void on_gc_finish_event_postponed(UNUSED_ARG void *data) {
+  if (on_gc_finish_callback != Qnil) rb_funcall(on_gc_finish_callback, rb_intern("call"), 0);
 }
