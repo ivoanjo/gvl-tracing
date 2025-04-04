@@ -48,13 +48,8 @@ static void on_gc_finish_event_postponed(void *data);
 static VALUE on_gc_finish_callback = Qnil;
 static rb_postponed_job_handle_t on_gc_finish_id = 0;
 
-static VALUE track_last_allocation_at(VALUE self);
-static void on_newobj_event_last_allocation_at(VALUE tpval, void *data);
-static VALUE last_allocation_at_stack = Qnil;
-#define LAST_ALLOCATION_AT_MAX_DEPTH 1000
-static VALUE last_allocation_at(UNUSED_ARG VALUE self);
-
 void init_who_called_me(VALUE lowlevel_toolkit_module);
+void init_last_allocation_at(VALUE lowlevel_toolkit_module);
 
 void Init_lowlevel_toolkit_native_extension(void) {
   VALUE lowlevel_toolkit_module = rb_define_module("LowlevelToolkit");
@@ -64,11 +59,8 @@ void Init_lowlevel_toolkit_native_extension(void) {
   rb_define_singleton_method(lowlevel_toolkit_module, "track_objects_created", track_objects_created, 0);
   rb_define_singleton_method(lowlevel_toolkit_module, "print_gc_timing", print_gc_timing, 0);
   rb_define_singleton_method(lowlevel_toolkit_module, "on_gc_finish", on_gc_finish, 1);
-  rb_define_singleton_method(lowlevel_toolkit_module, "track_last_allocation_at", track_last_allocation_at, 0);
-  rb_define_singleton_method(lowlevel_toolkit_module, "last_allocation_at", last_allocation_at, 0);
+  init_last_allocation_at(lowlevel_toolkit_module);
   init_who_called_me(lowlevel_toolkit_module);
-
-  rb_global_variable(&last_allocation_at_stack);
 }
 
 static VALUE track_objects_created(VALUE self) {
@@ -140,34 +132,4 @@ static void on_gc_finish_event(UNUSED_ARG VALUE tpval, UNUSED_ARG void *data) {
 
 static void on_gc_finish_event_postponed(UNUSED_ARG void *data) {
   if (on_gc_finish_callback != Qnil) rb_funcall(on_gc_finish_callback, rb_intern("call"), 0);
-}
-
-static VALUE track_last_allocation_at(UNUSED_ARG VALUE self) {
-  last_allocation_at_stack = rb_ary_new_capa(LAST_ALLOCATION_AT_MAX_DEPTH);
-  VALUE tp = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, on_newobj_event_last_allocation_at, NULL);
-  rb_tracepoint_enable(tp);
-  rb_yield(Qnil);
-  rb_tracepoint_disable(tp);
-  return Qnil;
-}
-
-static void on_newobj_event_last_allocation_at(VALUE tpval, UNUSED_ARG void *data) {
-  if (last_allocation_at_stack == Qnil || rb_objspace_internal_object_p(rb_tracearg_object(rb_tracearg_from_tracepoint(tpval)))) return;
-  VALUE buffer[LAST_ALLOCATION_AT_MAX_DEPTH];
-  int depth = rb_profile_frames(0, LAST_ALLOCATION_AT_MAX_DEPTH, buffer, NULL);
-  rb_ary_clear(last_allocation_at_stack);
-  for (int i = 0; i < depth; i++) rb_ary_push(last_allocation_at_stack, buffer[i]);
-}
-
-static VALUE last_allocation_at(UNUSED_ARG VALUE self) {
-  VALUE raw_stack = last_allocation_at_stack;
-  last_allocation_at_stack = Qnil; // Avoid recording any new stacks while we're doing the copying below
-  VALUE result = rb_ary_new();
-  for (int i = 0; i < RARRAY_LEN(raw_stack); i++) {
-    VALUE entry = rb_ary_entry(raw_stack, i);
-    VALUE file = rb_profile_frame_path(entry);
-    if (file != Qnil) rb_ary_push(result, rb_ary_new_from_args(2, file, rb_profile_frame_base_label(entry)));
-  }
-  last_allocation_at_stack = raw_stack;
-  return result;
 }
