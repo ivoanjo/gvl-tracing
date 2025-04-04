@@ -65,6 +65,8 @@ static VALUE track_objects_created(VALUE self) {
   rb_tracepoint_enable(tp);
   rb_yield(Qnil);
   rb_tracepoint_disable(tp);
+  // Filter out any objects that were marked as hidden after being created
+  for (int i = 0; i < RARRAY_LEN(result); i++) if (RBASIC_CLASS(rb_ary_entry(result, i)) == 0) rb_ary_store(result, i, Qnil);
   return result;
 }
 
