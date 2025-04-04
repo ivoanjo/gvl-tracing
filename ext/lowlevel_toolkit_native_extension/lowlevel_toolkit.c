@@ -37,10 +37,9 @@ int rb_objspace_internal_object_p(VALUE obj);
 #endif
 
 static void on_newobj_event(VALUE tpval, void *data);
-static void on_gc_event_timing(VALUE tpval, void *data);
 static VALUE track_objects_created(VALUE self);
-static VALUE print_gc_timing(VALUE self);
 
+void init_print_gc_timing(VALUE lowlevel_toolkit_module);
 void init_on_gc_finish(VALUE lowlevel_toolkit_module);
 void init_who_called_me(VALUE lowlevel_toolkit_module);
 void init_last_allocation_at(VALUE lowlevel_toolkit_module);
@@ -49,7 +48,7 @@ void Init_lowlevel_toolkit_native_extension(void) {
   VALUE lowlevel_toolkit_module = rb_define_module("LowlevelToolkit");
 
   rb_define_singleton_method(lowlevel_toolkit_module, "track_objects_created", track_objects_created, 0);
-  rb_define_singleton_method(lowlevel_toolkit_module, "print_gc_timing", print_gc_timing, 0);
+  init_print_gc_timing(lowlevel_toolkit_module);
   init_on_gc_finish(lowlevel_toolkit_module);
   init_last_allocation_at(lowlevel_toolkit_module);
   init_who_called_me(lowlevel_toolkit_module);
@@ -70,32 +69,4 @@ static void on_newobj_event(VALUE tpval, void *data) {
   VALUE result = (VALUE) data;
   VALUE obj = rb_tracearg_object(rb_tracearg_from_tracepoint(tpval));
   if (!rb_objspace_internal_object_p(obj)) rb_ary_push(result, obj);
-}
-
-static uint64_t get_monotonic_time_ns(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
-}
-
-static VALUE print_gc_timing(VALUE self) {
-  VALUE tp = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_GC_ENTER | RUBY_INTERNAL_EVENT_GC_EXIT, on_gc_event_timing, NULL);
-  rb_tracepoint_enable(tp);
-  rb_yield(Qnil);
-  rb_tracepoint_disable(tp);
-  return Qnil;
-}
-
-static void on_gc_event_timing(VALUE tpval, UNUSED_ARG void *data) {
-  static uint64_t gc_start_time = 0;
-  rb_event_flag_t event = rb_tracearg_event_flag(rb_tracearg_from_tracepoint(tpval));
-
-  if (event == RUBY_INTERNAL_EVENT_GC_ENTER) {
-    gc_start_time = get_monotonic_time_ns();
-  } else if (event == RUBY_INTERNAL_EVENT_GC_EXIT) {
-    uint64_t gc_end_time = get_monotonic_time_ns();
-    uint64_t gc_duration_ns = gc_end_time - gc_start_time;
-
-    fprintf(stdout, "GC worked for %.2f ms\n", (gc_duration_ns / 1000000.0));
-  }
 }
