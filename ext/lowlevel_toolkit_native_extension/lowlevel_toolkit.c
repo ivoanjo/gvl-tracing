@@ -30,7 +30,6 @@
 
 int rb_objspace_internal_object_p(VALUE obj);
 
-// Used to mark function arguments that are deliberately left unused
 #ifdef __GNUC__
   #define UNUSED_ARG  __attribute__((unused))
 #else
@@ -49,12 +48,6 @@ static void on_gc_finish_event_postponed(void *data);
 
 static VALUE on_gc_finish_callback = Qnil;
 static rb_postponed_job_handle_t on_gc_finish_id = 0;
-
-static uint64_t get_monotonic_time_ns(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
-}
 
 void Init_lowlevel_toolkit_native_extension(void) {
   VALUE lowlevel_toolkit_module = rb_define_module("LowlevelToolkit");
@@ -79,6 +72,12 @@ static void on_newobj_event(VALUE tpval, void *data) {
   VALUE result = (VALUE) data;
   VALUE obj = rb_tracearg_object(rb_tracearg_from_tracepoint(tpval));
   if (!rb_objspace_internal_object_p(obj)) rb_ary_push(result, obj);
+}
+
+static uint64_t get_monotonic_time_ns(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 }
 
 static VALUE print_gc_timing(VALUE self) {
