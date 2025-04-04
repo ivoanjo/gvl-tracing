@@ -13,3 +13,5 @@ gems.locked
 example*json
 .DS_Store
 .rspec_status
+bin/
+.cursor/
