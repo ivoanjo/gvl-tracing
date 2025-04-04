@@ -54,6 +54,8 @@ static VALUE last_allocation_at_stack = Qnil;
 #define LAST_ALLOCATION_AT_MAX_DEPTH 1000
 static VALUE last_allocation_at(UNUSED_ARG VALUE self);
 
+void init_who_called_me(VALUE lowlevel_toolkit_module);
+
 void Init_lowlevel_toolkit_native_extension(void) {
   VALUE lowlevel_toolkit_module = rb_define_module("LowlevelToolkit");
 
@@ -64,6 +66,7 @@ void Init_lowlevel_toolkit_native_extension(void) {
   rb_define_singleton_method(lowlevel_toolkit_module, "on_gc_finish", on_gc_finish, 1);
   rb_define_singleton_method(lowlevel_toolkit_module, "track_last_allocation_at", track_last_allocation_at, 0);
   rb_define_singleton_method(lowlevel_toolkit_module, "last_allocation_at", last_allocation_at, 0);
+  init_who_called_me(lowlevel_toolkit_module);
 
   rb_global_variable(&last_allocation_at_stack);
 }
