@@ -31,7 +31,7 @@ void init_print_gc_timing(VALUE lowlevel_toolkit_module);
 void init_on_gc_finish(VALUE lowlevel_toolkit_module);
 void init_who_called_me(VALUE lowlevel_toolkit_module);
 void init_last_allocation_at(VALUE lowlevel_toolkit_module);
-void init_gvl_track_waiting(VALUE lowlevel_toolkit_module);
+void init_track_wants_gvl(VALUE lowlevel_toolkit_module);
 
 void Init_lowlevel_toolkit_native_extension(void) {
   VALUE lowlevel_toolkit_module = rb_define_module("LowlevelToolkit");
@@ -41,5 +41,5 @@ void Init_lowlevel_toolkit_native_extension(void) {
   init_on_gc_finish(lowlevel_toolkit_module);
   init_last_allocation_at(lowlevel_toolkit_module);
   init_who_called_me(lowlevel_toolkit_module);
-  init_gvl_track_waiting(lowlevel_toolkit_module);
+  init_track_wants_gvl(lowlevel_toolkit_module);
 }
