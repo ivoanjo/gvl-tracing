@@ -7,7 +7,7 @@ static rb_postponed_job_handle_t postponed_id = 0;
 static void postponed(RB_UNUSED_VAR(void *data)) { rb_funcall(callback, rb_intern("call"), 0); }
 static void on_gc_finish_event(RB_UNUSED_VAR(VALUE _), RB_UNUSED_VAR(void *__)) { rb_postponed_job_trigger(postponed_id); }
 
-static VALUE on_gc_finish(VALUE self, VALUE user_callback) {
+static VALUE on_gc_finish(RB_UNUSED_VAR(VALUE _), VALUE user_callback) {
   callback = user_callback;
   VALUE tp = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_GC_EXIT, on_gc_finish_event, NULL);
   rb_tracepoint_enable(tp); rb_yield(Qnil); rb_tracepoint_disable(tp);

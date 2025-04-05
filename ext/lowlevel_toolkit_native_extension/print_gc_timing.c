@@ -18,7 +18,7 @@ static void on_gc_event(VALUE tpval, RB_UNUSED_VAR(void *_)) {
   }
 }
 
-static VALUE print_gc_timing(VALUE self) {
+static VALUE print_gc_timing(RB_UNUSED_VAR(VALUE _)) {
   VALUE tp = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_GC_ENTER | RUBY_INTERNAL_EVENT_GC_EXIT, on_gc_event, NULL);
   rb_tracepoint_enable(tp); rb_yield(Qnil); rb_tracepoint_disable(tp);
   return Qnil;

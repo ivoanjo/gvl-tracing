@@ -14,7 +14,7 @@ static VALUE filter_hidden_objects(VALUE result) {
   return result;
 }
 
-static VALUE track_objects_created(VALUE self) {
+static VALUE track_objects_created(RB_UNUSED_VAR(VALUE _)) {
   VALUE result = rb_ary_new();
   VALUE tp = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, on_newobj_event, (void *) result);
   rb_tracepoint_enable(tp); rb_yield(Qnil); rb_tracepoint_disable(tp);
