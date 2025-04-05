@@ -212,7 +212,7 @@ static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path, VALUE os_t
     NULL
   );
 
-  gc_tracepoint = rb_tracepoint_new(0, (RUBY_INTERNAL_EVENT_GC_ENTER | RUBY_INTERNAL_EVENT_GC_EXIT), on_gc_event, NULL);
+  gc_tracepoint = rb_tracepoint_new(0, (RUBY_INTERNAL_EVENT_GC_ENTER | RUBY_INTERNAL_EVENT_GC_EXIT | RUBY_INTERNAL_EVENT_SWITCH), on_gc_event, NULL);
 
   rb_tracepoint_enable(gc_tracepoint);
 
@@ -296,6 +296,7 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
   // future. One annoying thing to remember when generalizing this is how to reset the `previous_state` across multiple
   // start/stop calls to GvlTracing.
   if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && event_id == state->previous_state) return;
+  if (event_id == RUBY_INTERNAL_THREAD_EVENT_READY && state->previous_state == RUBY_INTERNAL_EVENT_SWITCH) return;
   state->previous_state = event_id;
 
   if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && state->sleeping) {
@@ -334,6 +335,10 @@ static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
     case RUBY_INTERNAL_EVENT_GC_ENTER: event_name = "gc"; break;
     // TODO: is it possible the thread wasn't running? Might need to save the last state.
     case RUBY_INTERNAL_EVENT_GC_EXIT: event_name = "running"; break;
+    case RUBY_INTERNAL_EVENT_SWITCH:
+      event_name = "quanta_ran_out";
+      state->previous_state = RUBY_INTERNAL_EVENT_SWITCH;
+      break;
   }
   render_event(state, event_name);
 }
