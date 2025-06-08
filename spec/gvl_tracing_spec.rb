@@ -98,7 +98,10 @@ RSpec.describe GvlTracing do
 
       trace = PerfettoTrace.new(trace_path)
       traces = trace.events_by_thread
-      expect(traces[0].map(&:name)).to include("sleeping")
+      expect(traces.size).to be 1
+
+      _id, events = traces.first
+      expect(events.map(&:name)).to include("sleeping")
     end
   end
 end
