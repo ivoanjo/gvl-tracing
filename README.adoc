@@ -8,7 +8,12 @@ A Ruby gem for getting a timeline view of Global VM Lock usage in your Ruby app 
 
 image::preview.png[]
 
-For instructions and examples on how to use it, see my https://ivoanjo.me/blog/2023/07/23/understanding-the-ruby-global-vm-lock-by-observing-it/[RubyKaigi 2023 talk on "Understanding the Ruby Global VM Lock by observing it"].
+There's a few blog posts and conference talks about what this gem is and how to read its results:
+
+* https://ivoanjo.me/blog/2025/03/30/mn-scheduling-and-how-the-ruby-gvl-impacts-app-perf/[m:n scheduling and how the (ruby) global vm lock impacts app performance]
+* https://ivoanjo.me/blog/2023/07/23/understanding-the-ruby-global-vm-lock-by-observing-it/[understanding the ruby global vm lock by observing it]
+* https://ivoanjo.me/blog/2023/02/11/ruby-unexpected-io-vs-cpu-unfairness/[ruby’s unexpected i/o vs cpu unfairness]
+* https://ivoanjo.me/blog/2022/07/17/tracing-ruby-global-vm-lock/[tracing ruby’s (global) vm lock] (Also available [https://techracho.bpsinc.jp/hachi8833/2022_09_02/120530[in Japanese] and https://velog.io/@heka1024/%EB%B2%88%EC%97%AD-tracing-rubys-global-vm-lock[in Korean])
 
 NOTE: This gem only works on Ruby 3.2 and above because it depends on the https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API]. Furthermore, the GVL Instrumentation API does not (as of this writing) currently work on Microsoft Windows.
 
