@@ -83,9 +83,11 @@ static int thread_storage_key = 0;
 static VALUE all_seen_threads = Qnil;
 static pthread_mutex_t all_seen_threads_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool os_threads_view_enabled;
+static uint32_t timeslice_meta_ms = 0;
 
 static ID sleep_id;
 
+static inline void initialize_timeslice_meta(void);
 static VALUE tracing_init_local_storage(VALUE, VALUE);
 static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path, VALUE os_threads_view_enabled_arg);
 static VALUE tracing_stop(VALUE _self);
@@ -146,6 +148,15 @@ void Init_gvl_tracing_native_extension(void) {
   rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
   rb_define_singleton_method(gvl_tracing_module, "_thread_id_for", ruby_thread_id_for, 1);
   rb_define_singleton_method(gvl_tracing_module, "trim_all_seen_threads", trim_all_seen_threads, 0);
+
+  initialize_timeslice_meta();
+}
+
+static inline void initialize_timeslice_meta(void) {
+  const char *timeslice = getenv("RUBY_THREAD_TIMESLICE");
+  if (timeslice) {
+    timeslice_meta_ms = (uint32_t) strtol(timeslice, NULL, 0);
+  }
 }
 
 static inline void initialize_thread_local_state(thread_local_state *state) {
@@ -185,10 +196,15 @@ static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path, VALUE os_t
   VALUE ruby_version = rb_const_get(rb_cObject, rb_intern("RUBY_VERSION"));
   Check_Type(ruby_version, T_STRING);
 
+  VALUE metadata = rb_obj_dup(ruby_version);
+  if (timeslice_meta_ms > 0) {
+    rb_str_append(metadata, rb_sprintf(", %ums", timeslice_meta_ms));
+  }
+
   fprintf(output_file, "[\n");
   fprintf(output_file,
     "  {\"ph\": \"M\", \"pid\": %"PRId64", \"name\": \"process_name\", \"args\": {\"name\": \"Ruby threads view (%s)\"}},\n",
-    process_id, StringValuePtr(ruby_version)
+    process_id, StringValuePtr(metadata)
   );
 
   double now_microseconds = render_event(state, "started_tracing");
@@ -213,6 +229,8 @@ static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path, VALUE os_t
   gc_tracepoint = rb_tracepoint_new(0, (RUBY_INTERNAL_EVENT_GC_ENTER | RUBY_INTERNAL_EVENT_GC_EXIT), on_gc_event, NULL);
 
   rb_tracepoint_enable(gc_tracepoint);
+
+  RB_GC_GUARD(metadata);
 
   return Qtrue;
 }
