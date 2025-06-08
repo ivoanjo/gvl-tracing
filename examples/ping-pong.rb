@@ -1,5 +1,4 @@
 require "gvl-tracing"
-require "gvl_tracing/sleep_tracking"
 
 # Shamelessly borrowed from https://github.com/ruby/ruby/pull/8331 with permission from @KJTsanaktsidis
 #

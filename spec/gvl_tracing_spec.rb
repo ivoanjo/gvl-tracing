@@ -89,4 +89,16 @@ RSpec.describe GvlTracing do
       expect(first).to include("wants_gvl")
     end
   end
+
+  describe "sleep tracking" do
+    it "records sleeping events" do
+      GvlTracing.start(trace_path) do
+        sleep(0.00001)
+      end
+
+      trace = PerfettoTrace.new(trace_path)
+      traces = trace.events_by_thread
+      expect(traces[0].map(&:name)).to include("sleeping")
+    end
+  end
 end

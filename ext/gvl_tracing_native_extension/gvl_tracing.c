@@ -69,7 +69,6 @@ typedef struct {
   #endif
   VALUE thread;
   rb_event_flag_t previous_state; // Used to coalesce similar events
-  bool sleeping; // Used to track when a thread is sleeping
 } thread_local_state;
 
 // Global mutable state
@@ -85,6 +84,8 @@ static VALUE all_seen_threads = Qnil;
 static pthread_mutex_t all_seen_threads_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool os_threads_view_enabled;
 
+static ID sleep_id;
+
 static VALUE tracing_init_local_storage(VALUE, VALUE);
 static VALUE tracing_start(UNUSED_ARG VALUE _self, VALUE output_path, VALUE os_threads_view_enabled_arg);
 static VALUE tracing_stop(VALUE _self);
@@ -92,7 +93,6 @@ static double timestamp_microseconds(void);
 static double render_event(thread_local_state *, const char *event_name);
 static void on_thread_event(rb_event_flag_t event, const rb_internal_thread_event_data_t *_unused1, void *_unused2);
 static void on_gc_event(VALUE tpval, void *_unused1);
-static VALUE mark_sleeping(VALUE _self);
 static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused);
 static void thread_local_state_mark(void *data);
 static inline int32_t thread_id_for(thread_local_state *state);
@@ -137,12 +137,13 @@ void Init_gvl_tracing_native_extension(void) {
 
   all_seen_threads = rb_ary_new();
 
+  sleep_id = rb_intern("sleep");
+
   VALUE gvl_tracing_module = rb_define_module("GvlTracing");
 
   rb_define_singleton_method(gvl_tracing_module, "_init_local_storage", tracing_init_local_storage, 1);
   rb_define_singleton_method(gvl_tracing_module, "_start", tracing_start, 2);
   rb_define_singleton_method(gvl_tracing_module, "_stop", tracing_stop, 0);
-  rb_define_singleton_method(gvl_tracing_module, "mark_sleeping", mark_sleeping, 0);
   rb_define_singleton_method(gvl_tracing_module, "_thread_id_for", ruby_thread_id_for, 1);
   rb_define_singleton_method(gvl_tracing_module, "trim_all_seen_threads", trim_all_seen_threads, 0);
 }
@@ -293,11 +294,17 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
   if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && event_id == state->previous_state) return;
   state->previous_state = event_id;
 
-  if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED && state->sleeping) {
-    render_event(state, "sleeping");
-    return;
-  } else {
-    state->sleeping = false;
+  if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED &&
+      // Check that fiber/thread is not being shut down
+      rb_fiber_alive_p(rb_fiber_current())) {
+    ID current_method = 0;
+    VALUE current_method_owner = Qnil;
+    rb_frame_method_id_and_class(&current_method, &current_method_owner);
+
+    if (current_method == sleep_id && current_method_owner == rb_mKernel) {
+      render_event(state, "sleeping");
+      return;
+    }
   }
 
   const char* event_name = "bug_unknown_event";
@@ -331,11 +338,6 @@ static void on_gc_event(VALUE tpval, UNUSED_ARG void *_unused1) {
     case RUBY_INTERNAL_EVENT_GC_EXIT: event_name = "running"; break;
   }
   render_event(state, event_name);
-}
-
-static VALUE mark_sleeping(UNUSED_ARG VALUE _self) {
-  GT_CURRENT_THREAD_LOCAL_STATE()->sleeping = true;
-  return Qnil;
 }
 
 static size_t thread_local_state_memsize(UNUSED_ARG const void *_unused) { return sizeof(thread_local_state); }
