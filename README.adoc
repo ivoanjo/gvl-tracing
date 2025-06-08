@@ -10,7 +10,7 @@ image::preview.png[]
 
 For instructions and examples on how to use it, see my https://ivoanjo.me/blog/2023/07/23/understanding-the-ruby-global-vm-lock-by-observing-it/[RubyKaigi 2023 talk on "Understanding the Ruby Global VM Lock by observing it"].
 
-NOTE: This gem only works on Ruby 3.2 and above because it depends on the https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API]. Furthermore, the GVL Instrumentation API does not (as of Ruby 3.2 and 3.3) currently work on Microsoft Windows.
+NOTE: This gem only works on Ruby 3.2 and above because it depends on the https://github.com/ruby/ruby/pull/5500[GVL Instrumentation API]. Furthermore, the GVL Instrumentation API does not (as of this writing) currently work on Microsoft Windows.
 
 == Quickest start
 
@@ -68,11 +68,25 @@ This gem only provides a single module (`GvlTracing`) with methods:
 
 The resulting traces can be analyzed by going to https://ui.perfetto.dev/[Perfetto UI].
 
+=== What do each of the events mean?
+
+The following events are shown in the timeline:
+
+* `started_tracing`: First event, when `GvlTracing` is enabled
+* `stopped_tracing`: Last event, when `GvlTracing` is disabled
+* `started`: Ruby thread created
+* `died`: Ruby thread died
+* `wants_gvl`: Ruby thread is ready to execute, but needs the GVL before it can do so
+* `running`: Ruby thread is running code (and owns the GVL)
+* `waiting`: Ruby thread is waiting to be waken up when some event happens (IO, timeout)
+* `gc`: Doing garbage collection
+* `sleeping`: Thread called `Kernel#sleep`
+
+Note that not all events come from the GVL instrumentation API, and some events were renamed vs the "RUBY_INTERNAL_THREAD_EVENT" entries.
+
 == Experimental features
 
-1. Sleep tracking: Add `require 'gvl_tracing/sleep_tracking'` to add a more specific `sleeping` state for sleeps (which are otherwise rendered as `waiting` without this feature)
-
-2. OS threads view: Pass in `os_threads_view_enabled: true` to `GvlTracing.start` to also render a view of Ruby thread activity from the OS native threads point-of-view. This is useful when using M:N thread scheduling, which is used on Ruby 3.3+ Ractors, and when using the `RUBY_MN_THREADS=1` setting.
+1. OS threads view: Pass in `os_threads_view_enabled: true` to `GvlTracing.start` to also render a view of Ruby thread activity from the OS native threads point-of-view. This is useful when using M:N thread scheduling, which is used on Ruby 3.3+ Ractors, and when using the `RUBY_MN_THREADS=1` setting.
 
 == Tips
 
