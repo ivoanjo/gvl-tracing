@@ -37,7 +37,7 @@
 #include <stdbool.h>
 #include <ruby.h>
 
-#define DIRECT_BIND_VERSION "1.0.0.beta1"
+#define DIRECT_BIND_VERSION "1.0.0"
 
 typedef struct {
   bool ok;
