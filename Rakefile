@@ -37,9 +37,9 @@ DirectBind::Rake::InstallTask.new("gvl_tracing_native_extension")
 
 task default: [:"direct-bind:install", :compile, :"standard:fix", :spec]
 
-Rake::Task["build"].enhance { Rake::Task["spec_validate_permissions"].execute }
+Rake::Task["build"].enhance { Rake::Task["spec_validate_permissions"].invoke }
 
-task :spec_validate_permissions do
+task :spec_validate_permissions => [:compile] do
   require "rspec"
   RSpec.world.reset # If any other tests ran before, flushes them
   ret = RSpec::Core::Runner.run(["spec/gem_packaging.rb"])
