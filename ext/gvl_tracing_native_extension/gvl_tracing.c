@@ -306,9 +306,13 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
 
   if (!state) return;
 
-  #ifdef RUBY_3_3_PLUS
-    if (!state->thread) state->thread = event_data->thread;
-  #endif
+  if (!state->thread) {
+    #ifdef RUBY_3_3_PLUS
+      state->thread = event_data->thread;
+    #else
+      if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED) { state->thread = rb_thread_current(); }
+    #endif
+  }
   // In some cases, Ruby seems to emit multiple suspended events for the same thread in a row (e.g. when multiple threads)
   // are waiting on a Thread::ConditionVariable.new that gets signaled. We coalesce these events to make the resulting
   // timeline easier to see.
@@ -320,8 +324,8 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
   state->previous_state = event_id;
 
   if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED &&
-      // Check that fiber/thread is not being shut down
-      is_thread_alive(state->thread)
+      // Check that thread is not being shut down
+      (state->thread != Qnil && is_thread_alive(state->thread))
   ) {
     ID current_method = 0;
     VALUE current_method_owner = Qnil;
