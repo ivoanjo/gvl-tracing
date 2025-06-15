@@ -27,12 +27,15 @@
 #include <ruby/debug.h>
 #include <ruby/thread.h>
 #include <ruby/atomic.h>
+
 #include <errno.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <sys/types.h>
 #include <pthread.h>
 #include <stdint.h>
+
+#include "direct-bind.h"
 
 #include "extconf.h"
 
@@ -86,6 +89,7 @@ static bool os_threads_view_enabled;
 static uint32_t timeslice_meta_ms = 0;
 
 static ID sleep_id;
+static VALUE (*is_thread_alive)(VALUE thread);
 
 static inline void initialize_timeslice_meta(void);
 static VALUE tracing_init_local_storage(VALUE, VALUE);
@@ -150,6 +154,9 @@ void Init_gvl_tracing_native_extension(void) {
   rb_define_singleton_method(gvl_tracing_module, "trim_all_seen_threads", trim_all_seen_threads, 0);
 
   initialize_timeslice_meta();
+
+  direct_bind_initialize(gvl_tracing_module, true);
+  is_thread_alive = direct_bind_get_cfunc_with_arity(rb_cThread, rb_intern("alive?"), 0, true).func;
 }
 
 static inline void initialize_timeslice_meta(void) {
@@ -314,7 +321,8 @@ static void on_thread_event(rb_event_flag_t event_id, const rb_internal_thread_e
 
   if (event_id == RUBY_INTERNAL_THREAD_EVENT_SUSPENDED &&
       // Check that fiber/thread is not being shut down
-      rb_fiber_alive_p(rb_fiber_current())) {
+      is_thread_alive(state->thread)
+  ) {
     ID current_method = 0;
     VALUE current_method_owner = Qnil;
     rb_frame_method_id_and_class(&current_method, &current_method_owner);

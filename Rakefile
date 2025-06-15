@@ -29,11 +29,13 @@ require "bundler/gem_tasks"
 require "standard/rake"
 require "rake/extensiontask"
 require "rspec/core/rake_task"
+require "direct_bind/rake"
 
 Rake::ExtensionTask.new("gvl_tracing_native_extension")
 RSpec::Core::RakeTask.new(:spec)
+DirectBind::Rake::InstallTask.new("gvl_tracing_native_extension")
 
-task default: [:compile, :"standard:fix", :spec]
+task default: [:"direct-bind:install", :compile, :"standard:fix", :spec]
 
 Rake::Task["build"].enhance { Rake::Task["spec_validate_permissions"].execute }
 

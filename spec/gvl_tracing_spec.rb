@@ -3,6 +3,8 @@
 require "spec_helper"
 require "json"
 require "net/http"
+require "direct_bind/rspec_helper"
+
 require "perfetto_trace"
 
 RSpec.describe GvlTracing do
@@ -103,5 +105,9 @@ RSpec.describe GvlTracing do
       _id, events = traces.first
       expect(events.map(&:name)).to include("sleeping")
     end
+  end
+
+  it "uses the correct direct-bind gem version" do
+    DirectBind::RSpecHelper.expect_direct_bind_version_to_be_up_to_date_in(GvlTracing)
   end
 end
