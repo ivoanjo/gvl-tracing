@@ -14,3 +14,4 @@ example*json
 thread_name_with_extension.json
 .DS_Store
 .rspec_status
+spec/examples.txt
